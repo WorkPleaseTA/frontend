@@ -1,6 +1,7 @@
 import React from 'react';
 import { View, TouchableOpacity, Text, StyleSheet } from 'react-native';
 import { BottomTabBarProps } from '@react-navigation/bottom-tabs';
+import { useNavigation } from '@react-navigation/native';
 import { Colors } from '../constants/colors';
 
 const TABS = [
@@ -21,6 +22,33 @@ export default function BottomTabBar({ state, navigation }: BottomTabBarProps) {
             key={tab.name}
             style={styles.tab}
             onPress={() => navigation.navigate(tab.name)}
+            activeOpacity={0.7}
+          >
+            <Text style={styles.icon}>{tab.icon}</Text>
+            <Text style={[styles.label, isFocused && styles.activeLabel]}>{tab.label}</Text>
+          </TouchableOpacity>
+        );
+      })}
+    </View>
+  );
+}
+
+export function BottomTabBarStatic({ activeIndex }: { activeIndex: number }) {
+  const navigation = useNavigation();
+
+  const handlePress = (tabName: string) => {
+    navigation.navigate('MainTabs' as never, { screen: tabName } as never);
+  };
+
+  return (
+    <View style={styles.container}>
+      {TABS.map((tab, index) => {
+        const isFocused = index === activeIndex;
+        return (
+          <TouchableOpacity
+            key={tab.name}
+            style={styles.tab}
+            onPress={() => handlePress(tab.name)}
             activeOpacity={0.7}
           >
             <Text style={styles.icon}>{tab.icon}</Text>

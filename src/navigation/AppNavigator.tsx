@@ -24,11 +24,14 @@ import RegisterCompleteScreen from '../screens/auth/RegisterCompleteScreen';
 
 // Home
 import HomeScreen from '../screens/home/HomeScreen';
+import ScheduleChangeScreen from '../screens/home/ScheduleChangeScreen';
 
 // Schedule
 import TodayScheduleScreen from '../screens/schedule/TodayScheduleScreen';
 import AllScheduleScreen from '../screens/schedule/AllScheduleScreen';
 import FixedScheduleEditScreen from '../screens/schedule/FixedScheduleEditScreen';
+import FullScheduleScreen from '../screens/schedule/FullScheduleScreen';
+import FixedScheduleScreen from '../screens/schedule/FixedScheduleScreen';
 
 // Todo
 import TodoListScreen from '../screens/todo/TodoListScreen';
@@ -71,10 +74,13 @@ export type RootStackParamList = {
   RegisterComplete: undefined;
   // Main
   MainTabs: undefined;
+  ScheduleChange: undefined;
   // Schedule
   TodaySchedule: undefined;
   AllSchedule: undefined;
   FixedScheduleEdit: undefined;
+  FixedSchedule: undefined;
+  FullSchedule: undefined;
   // Todo
   TodoList: undefined;
   TodoEdit: undefined;
@@ -143,7 +149,10 @@ export default function AppNavigator() {
         <Stack.Screen name="RegisterComplete" component={RegisterCompleteScreen} />
         {/* Main */}
         <Stack.Screen name="MainTabs" component={MainTabs} />
+        <Stack.Screen name="ScheduleChange" component={ScheduleChangeScreen} />
         {/* Schedule */}
+        <Stack.Screen name="FullSchedule" component={FullScheduleScreen} />
+        <Stack.Screen name="FixedSchedule" component={FixedScheduleScreen} />
         <Stack.Screen name="TodaySchedule" component={TodayScheduleScreen} />
         <Stack.Screen name="AllSchedule" component={AllScheduleScreen} />
         <Stack.Screen name="FixedScheduleEdit" component={FixedScheduleEditScreen} />

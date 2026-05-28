@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, TextStyle } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { Colors } from '../constants/colors';
 
@@ -8,9 +8,10 @@ interface HeaderProps {
   showBack?: boolean;
   onBackPress?: () => void;
   rightElement?: React.ReactNode;
+  titleStyle?: TextStyle;
 }
 
-export default function Header({ title, showBack = true, onBackPress, rightElement }: HeaderProps) {
+export default function Header({ title, showBack = true, onBackPress, rightElement, titleStyle }: HeaderProps) {
   const navigation = useNavigation();
 
   const handleBack = () => {
@@ -30,7 +31,7 @@ export default function Header({ title, showBack = true, onBackPress, rightEleme
           </TouchableOpacity>
         )}
       </View>
-      <Text style={styles.title}>{title}</Text>
+      <Text style={[styles.title, titleStyle]}>{title}</Text>
       <View style={styles.side}>{rightElement ?? null}</View>
     </View>
   );
