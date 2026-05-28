@@ -8,7 +8,11 @@
       "Bash(node -e \"require\\('expo/metro-config'\\)\")",
       "Bash(npm list *)",
       "Bash(node *)",
-      "Bash(python -c \"import sys,json; p=json.load\\(sys.stdin\\); print\\('peerDeps:', p.get\\('peerDependencies',{}\\)\\); print\\('deps:', list\\(p.get\\('dependencies',{}\\).keys\\(\\)\\)\\)\")"
+      "Bash(python -c \"import sys,json; p=json.load\\(sys.stdin\\); print\\('peerDeps:', p.get\\('peerDependencies',{}\\)\\); print\\('deps:', list\\(p.get\\('dependencies',{}\\).keys\\(\\)\\)\\)\")",
+      "Bash(git checkout *)",
+      "Bash(git add *)",
+      "Bash(git commit *)",
+      "Bash(git push *)"
     ]
   }
 }
