@@ -1,114 +1,196 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import {
   View,
   Text,
   StyleSheet,
-  ScrollView,
-  TextInput,
-  TouchableOpacity,
   SafeAreaView,
+  TouchableOpacity,
+  FlatList,
+  TextInput,
   KeyboardAvoidingView,
   Platform,
+  Alert,
 } from 'react-native';
-import Header from '../../components/Header';
+import { useNavigation } from '@react-navigation/native';
+import { Colors } from '../../constants/colors';
 
-const DATE_LABEL = '2025년 4월 28일 월요일';
-const ROOM_NAME = '일해조 매장';
+const GROUP = { name: '스타벅스 강남점 전체', memberCount: 12 };
+const ME = '홍길동';
 
-const TODO_ITEMS = ['오후 3시 쿠팡 택배 및 냉장고 정리', '매장 바닥 청소'];
+const INIT_MSGS = [
+  { id: '1', sender: '김매니저', initial: '김', text: '안녕하세요 여러분! 오늘도 파이팅!', isMe: false, time: '오후 2:50' },
+  { id: '2', sender: ME, initial: '홍', text: '안녕하세요!', isMe: true, time: '오후 2:51' },
+  { id: '3', sender: '이바리스타', initial: '이', text: '내일 미팅 몇 시예요?', isMe: false, time: '오후 2:52' },
+  { id: '4', sender: '김매니저', initial: '김', text: '오전 10시입니다. 모두 참석 부탁드려요!', isMe: false, time: '오후 2:53' },
+  { id: '5', sender: ME, initial: '홍', text: '네, 참석하겠습니다!', isMe: true, time: '오후 2:55' },
+  { id: '6', sender: '박알바', initial: '박', text: '저도 참석합니다 😊', isMe: false, time: '오후 2:56' },
+];
+
+type Msg = (typeof INIT_MSGS)[0];
+
+const AVATAR_BG: Record<string, string> = {
+  '김': '#5B9BD5',
+  '이': '#7B68EE',
+  '박': '#52B788',
+  '최': '#E07070',
+  '홍': Colors.primary,
+};
+
+function SenderAvatar({ initial }: { initial: string }) {
+  const bg = AVATAR_BG[initial] ?? '#AAAAAA';
+  return (
+    <View style={[styles.avatar, { backgroundColor: bg }]}>
+      <Text style={styles.avatarText}>{initial}</Text>
+    </View>
+  );
+}
+
+function Bubble({ item, showSender }: { item: Msg; showSender: boolean }) {
+  return (
+    <View style={[styles.row, item.isMe ? styles.rowMe : styles.rowOther]}>
+      {/* Left avatar slot for others */}
+      {!item.isMe && (
+        <View style={styles.avatarSlot}>
+          {showSender && <SenderAvatar initial={item.initial} />}
+        </View>
+      )}
+
+      <View style={styles.msgWrap}>
+        {showSender && !item.isMe && (
+          <Text style={styles.senderName}>{item.sender}</Text>
+        )}
+        <View style={[styles.bubble, item.isMe ? styles.bubbleMe : styles.bubbleOther]}>
+          <Text style={[styles.bubbleText, item.isMe && styles.bubbleTextMe]}>
+            {item.text}
+          </Text>
+        </View>
+        <Text style={[styles.time, item.isMe ? styles.timeMe : styles.timeOther]}>
+          {item.time}
+        </Text>
+      </View>
+    </View>
+  );
+}
+
+function AiTodoChip() {
+  return (
+    <TouchableOpacity
+      style={styles.aiChip}
+      activeOpacity={0.8}
+      onPress={() => Alert.alert('AI TO-DO', '채팅 내용을 TO-DO 리스트로 변환합니다.')}
+    >
+      <Text style={styles.aiChipIcon}>✨</Text>
+      <Text style={styles.aiChipText}>AI TO-DO 리스트 자동 변환</Text>
+      <Text style={styles.aiChipArrow}>→</Text>
+    </TouchableOpacity>
+  );
+}
 
 export default function GroupChatScreen() {
+  const navigation = useNavigation();
+  const [msgs, setMsgs] = useState<Msg[]>(INIT_MSGS);
   const [input, setInput] = useState('');
-  const [todos, setTodos] = useState<string[]>(TODO_ITEMS);
+  const listRef = useRef<FlatList>(null);
+  const hasText = input.trim().length > 0;
 
-  const handleSend = () => {
-    const trimmed = input.trim();
-    if (!trimmed) return;
+  const send = () => {
+    const text = input.trim();
+    if (!text) return;
+    const now = new Date();
+    setMsgs((prev) => [
+      ...prev,
+      {
+        id: String(Date.now()),
+        sender: ME,
+        initial: '홍',
+        text,
+        isMe: true,
+        time: now.toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' }),
+      },
+    ]);
     setInput('');
-  };
-
-  const handleAddTodo = () => {
-    setTodos(prev => [...prev, '']);
+    setTimeout(() => listRef.current?.scrollToEnd({ animated: true }), 80);
   };
 
   return (
-    <SafeAreaView style={styles.safeArea}>
-      <Header title={ROOM_NAME} titleStyle={styles.headerTitle} />
+    <SafeAreaView style={styles.safe}>
+      {/* ── Header ── */}
+      <View style={styles.header}>
+        <TouchableOpacity onPress={() => navigation.goBack()} hitSlop={8} style={styles.backBtn}>
+          <Text style={styles.backArrow}>←</Text>
+        </TouchableOpacity>
 
+        <View style={styles.headerCenter}>
+          <View style={styles.headerNameRow}>
+            <Text style={styles.headerName} numberOfLines={1}>{GROUP.name}</Text>
+            <Text style={styles.memberCount}>{GROUP.memberCount}</Text>
+          </View>
+          <View style={styles.workingBadge}>
+            <View style={styles.workingDot} />
+            <Text style={styles.workingText}>근무중</Text>
+          </View>
+        </View>
+
+        <TouchableOpacity hitSlop={8} style={styles.moreBtn}>
+          <Text style={styles.moreText}>•••</Text>
+        </TouchableOpacity>
+      </View>
+
+      {/* ── Messages + Bottom ── */}
       <KeyboardAvoidingView
         style={styles.flex}
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        keyboardVerticalOffset={0}
       >
-        <ScrollView
-          style={styles.messageList}
-          contentContainerStyle={styles.messageContent}
+        <FlatList
+          ref={listRef}
+          data={msgs}
+          keyExtractor={(m) => m.id}
+          renderItem={({ item, index }) => {
+            const prev = index > 0 ? msgs[index - 1] : null;
+            const showSender = !item.isMe && item.sender !== prev?.sender;
+            return <Bubble item={item} showSender={showSender} />;
+          }}
+          contentContainerStyle={styles.msgList}
           showsVerticalScrollIndicator={false}
-        >
-          {/* 날짜 */}
-          <Text style={styles.dateLabel}>{DATE_LABEL}</Text>
+          onContentSizeChange={() => listRef.current?.scrollToEnd({ animated: false })}
+        />
 
-          {/* 내 메시지 1 */}
-          <View style={styles.myRow}>
-            <View style={styles.myBubble}>
-              <Text style={styles.myText}>
-                오늘 오후 3시에 쿠팡 택배가 배송된다고 하네요. 담당 근무자는 택배를 받아 냉장고에 넣어놔 주세요.
-              </Text>
-            </View>
-          </View>
+        {/* ── AI TO-DO Chip ── */}
+        <AiTodoChip />
 
-          {/* 내 메시지 2 */}
-          <View style={[styles.myRow, styles.myRowSmall]}>
-            <View style={styles.myBubble}>
-              <Text style={styles.myText}>부탁드립니다!</Text>
-            </View>
-          </View>
-
-          {/* AI TO-DO 섹션 */}
-          <View style={styles.todoSection}>
-            <Text style={styles.todoTitle}>AI TO-DO 리스트 자동 변환</Text>
-
-            {/* 버블들 가로 스크롤 */}
-            <ScrollView
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              contentContainerStyle={styles.todoScrollContent}
-            >
-              {todos.map((item, index) => (
-                <View key={index} style={styles.todoBubble}>
-                  <Text style={styles.todoBubbleText}>{item}</Text>
-                </View>
-              ))}
-              <TouchableOpacity style={styles.todoAddBtn} onPress={handleAddTodo} activeOpacity={0.7}>
-                <Text style={styles.todoAddText}>+ 직접 추가</Text>
-              </TouchableOpacity>
-            </ScrollView>
-          </View>
-        </ScrollView>
-
-        {/* 하단 입력바 */}
+        {/* ── Input bar ── */}
         <View style={styles.inputBar}>
-          <TouchableOpacity style={styles.iconBtn} activeOpacity={0.7}>
+          {/* Camera */}
+          <TouchableOpacity style={styles.iconBtn}>
             <Text style={styles.iconText}>📷</Text>
           </TouchableOpacity>
 
+          {/* Text field */}
           <TextInput
             style={styles.input}
+            placeholder="메시지를 입력하세요"
+            placeholderTextColor="#BBBBBB"
             value={input}
             onChangeText={setInput}
-            placeholder="Type a message"
-            placeholderTextColor="#999999"
-            onSubmitEditing={handleSend}
-            returnKeyType="send"
             multiline
+            maxLength={500}
           />
 
-          <TouchableOpacity style={styles.iconBtn} activeOpacity={0.7}>
-            <Text style={styles.iconText}>🎤</Text>
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.iconBtn} activeOpacity={0.7} onPress={handleSend}>
-            <Text style={styles.iconText}>🖼️</Text>
-          </TouchableOpacity>
+          {/* Right — mic+image or send */}
+          {hasText ? (
+            <TouchableOpacity style={styles.sendBtn} onPress={send} activeOpacity={0.8}>
+              <Text style={styles.sendIcon}>▶</Text>
+            </TouchableOpacity>
+          ) : (
+            <View style={styles.rightIcons}>
+              <TouchableOpacity style={styles.iconBtn}>
+                <Text style={styles.iconText}>🖼️</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.iconBtn}>
+                <Text style={styles.iconText}>🎤</Text>
+              </TouchableOpacity>
+            </View>
+          )}
         </View>
       </KeyboardAvoidingView>
     </SafeAreaView>
@@ -116,135 +198,189 @@ export default function GroupChatScreen() {
 }
 
 const styles = StyleSheet.create({
-  safeArea: {
-    flex: 1,
-    backgroundColor: '#FFFFFF',
-  },
-  flex: {
-    flex: 1,
-  },
+  safe: { flex: 1, backgroundColor: '#FFFFFF' },
+  flex: { flex: 1, backgroundColor: '#F6F6F6' },
 
-  headerTitle: {
-    fontSize: 14,
-    fontWeight: '400',
-  },
-
-  messageList: {
-    flex: 1,
-  },
-  messageContent: {
-    paddingHorizontal: 16,
-    paddingTop: 16,
-    paddingBottom: 12,
-  },
-
-  dateLabel: {
-    textAlign: 'center',
-    fontSize: 12,
-    color: '#999999',
-    marginBottom: 20,
-  },
-
-  // 내 메시지
-  myRow: {
-    alignItems: 'flex-end',
-    marginBottom: 4,
-  },
-  myRowSmall: {
-    marginBottom: 20,
-  },
-  myBubble: {
-    backgroundColor: '#FF8D28',
-    borderRadius: 16,
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    maxWidth: '75%',
-  },
-  myText: {
-    fontSize: 14,
-    fontWeight: '500',
-    color: '#FFFFFF',
-  },
-
-  // AI TO-DO 섹션
-  todoSection: {
-    gap: 12,
-  },
-  todoTitle: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#000000',
-    letterSpacing: -0.32,
-  },
-  todoScrollContent: {
-    gap: 8,
-    paddingBottom: 4,
-  },
-  todoBubble: {
-    backgroundColor: '#E9E9EB',
-    borderRadius: 4,
-    borderTopRightRadius: 18,
-    borderBottomLeftRadius: 18,
-    borderBottomRightRadius: 18,
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    maxWidth: 220,
-  },
-  todoBubbleText: {
-    fontSize: 14,
-    fontWeight: '500',
-    color: '#000000',
-  },
-  todoAddBtn: {
-    borderWidth: 1,
-    borderColor: '#E9E9EB',
-    backgroundColor: '#FFFFFF',
-    borderRadius: 4,
-    borderTopRightRadius: 18,
-    borderBottomLeftRadius: 18,
-    borderBottomRightRadius: 18,
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-  },
-  todoAddText: {
-    fontSize: 14,
-    fontWeight: '500',
-    color: '#000000',
-  },
-
-  // 하단 입력바
-  inputBar: {
+  /* Header */
+  header: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#FFFFFE',
-    borderTopLeftRadius: 8,
-    borderTopRightRadius: 8,
-    borderBottomLeftRadius: 30,
-    borderBottomRightRadius: 30,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    backgroundColor: '#FFFFFF',
+    borderBottomWidth: 1,
+    borderBottomColor: '#F0F0F0',
+  },
+  backBtn: { width: 36 },
+  backArrow: { fontSize: 22, color: '#1A1A1A' },
+  headerCenter: {
+    flex: 1,
+    alignItems: 'center',
+    gap: 4,
+  },
+  headerNameRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+  },
+  headerName: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#1A1A1A',
+    flexShrink: 1,
+  },
+  memberCount: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: Colors.primary,
+  },
+  workingBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#E8F5E9',
+    borderRadius: 10,
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    gap: 4,
+  },
+  workingDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: '#2ECC71',
+  },
+  workingText: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#27AE60',
+  },
+  moreBtn: { width: 36, alignItems: 'flex-end' },
+  moreText: { fontSize: 14, color: '#888888', letterSpacing: 1 },
+
+  /* Avatar */
+  avatar: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  avatarText: { fontSize: 13, fontWeight: '700', color: '#FFFFFF' },
+  avatarSlot: { width: 34, alignItems: 'center' },
+
+  /* Messages */
+  msgList: {
+    paddingHorizontal: 14,
+    paddingTop: 16,
+    paddingBottom: 12,
+    gap: 8,
+  },
+  row: {
+    flexDirection: 'row',
+    alignItems: 'flex-end',
+    gap: 8,
+    marginBottom: 2,
+  },
+  rowMe: { flexDirection: 'row-reverse' },
+  rowOther: { flexDirection: 'row' },
+  msgWrap: { maxWidth: '68%', gap: 3 },
+  senderName: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#555555',
+    marginLeft: 2,
+    marginBottom: 3,
+  },
+  bubble: {
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderRadius: 20,
+  },
+  bubbleMe: {
+    backgroundColor: Colors.primary,
+    borderBottomRightRadius: 4,
+    alignSelf: 'flex-end',
+  },
+  bubbleOther: {
+    backgroundColor: '#FFFFFF',
+    borderBottomLeftRadius: 4,
+    alignSelf: 'flex-start',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.07,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  bubbleText: { fontSize: 14, color: '#1A1A1A', lineHeight: 20 },
+  bubbleTextMe: { color: '#FFFFFF' },
+  time: { fontSize: 11, color: '#BBBBBB' },
+  timeMe: { textAlign: 'right' },
+  timeOther: { textAlign: 'left' },
+
+  /* AI TO-DO Chip */
+  aiChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginHorizontal: 14,
+    marginBottom: 8,
+    paddingHorizontal: 16,
+    paddingVertical: 11,
+    backgroundColor: '#FFF4EE',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#FFD4B8',
+    gap: 8,
+  },
+  aiChipIcon: { fontSize: 16 },
+  aiChipText: {
+    flex: 1,
+    fontSize: 13,
+    fontWeight: '600',
+    color: Colors.primary,
+  },
+  aiChipArrow: {
+    fontSize: 14,
+    color: Colors.primary,
+    fontWeight: '700',
+  },
+
+  /* Input bar */
+  inputBar: {
+    flexDirection: 'row',
+    alignItems: 'flex-end',
     paddingHorizontal: 12,
     paddingVertical: 10,
-    gap: 8,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: -2 },
-    shadowOpacity: 0.06,
-    shadowRadius: 8,
-    elevation: 4,
+    backgroundColor: '#FFFFFF',
+    borderTopWidth: 1,
+    borderTopColor: '#F0F0F0',
+    gap: 6,
   },
   iconBtn: {
-    padding: 4,
+    width: 36,
+    height: 36,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  iconText: {
-    fontSize: 20,
-  },
+  iconText: { fontSize: 20 },
   input: {
     flex: 1,
-    borderWidth: 1,
-    borderColor: 'rgba(95, 108, 123, 0.6)',
-    borderRadius: 16,
+    minHeight: 36,
+    maxHeight: 100,
+    backgroundColor: '#F5F5F5',
+    borderRadius: 18,
     paddingHorizontal: 14,
     paddingVertical: 8,
-    fontSize: 12,
-    color: '#000000',
-    maxHeight: 100,
+    fontSize: 14,
+    color: '#1A1A1A',
   },
+  rightIcons: { flexDirection: 'row', alignItems: 'center' },
+  sendBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: Colors.primary,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  sendIcon: { fontSize: 14, color: '#FFFFFF', marginLeft: 2 },
 });

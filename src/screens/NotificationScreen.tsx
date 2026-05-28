@@ -1,11 +1,11 @@
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
-import { Colors } from '../../constants/colors';
+import { Colors } from '../constants/colors';
 
-export default function StoreConfirmScreen() {
+export default function NotificationScreen() {
   return (
     <View style={styles.container}>
-      <Text style={styles.text}>매장 등록 확인 / 완료</Text>
+      <Text style={styles.text}>알림</Text>
     </View>
   );
 }
