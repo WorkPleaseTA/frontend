@@ -1,103 +1,98 @@
 import React, { useState } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
+import { Colors } from '../constants/colors';
 
 interface DropDownProps {
-  placeholder: string;
+  label: string;
   options: string[];
-  value: string;
+  value: string | null;
   onSelect: (value: string) => void;
 }
 
-export default function DropDown({ placeholder, options, value, onSelect }: DropDownProps) {
+export default function DropDown({ label, options, value, onSelect }: DropDownProps) {
   const [open, setOpen] = useState(false);
 
-  const handleSelect = (item: string) => {
-    onSelect(item);
-    setOpen(false);
-  };
-
   return (
-    <View style={[styles.container, open && styles.containerOpen]}>
-      {/* 트리거 */}
+    <View style={styles.wrapper}>
       <TouchableOpacity
         style={styles.trigger}
-        onPress={() => setOpen((prev) => !prev)}
-        activeOpacity={0.9}
+        onPress={() => setOpen(!open)}
+        activeOpacity={0.8}
       >
         <Text style={[styles.triggerText, !value && styles.placeholder]}>
-          {value || placeholder}
+          {value ?? label}
         </Text>
-        <Text style={styles.arrow}>▼</Text>
+        <Text style={styles.arrow}>{open ? '▲' : '▼'}</Text>
       </TouchableOpacity>
-
-      {/* 옵션 목록 */}
-      {open &&
-        options.map((item) => {
-          const selected = item === value;
-          return (
+      {open && (
+        <View style={styles.list}>
+          {options.map((opt) => (
             <TouchableOpacity
-              key={item}
-              style={[styles.option, selected && styles.optionSelected]}
-              onPress={() => handleSelect(item)}
-              activeOpacity={0.8}
+              key={opt}
+              style={styles.item}
+              onPress={() => { onSelect(opt); setOpen(false); }}
+              activeOpacity={0.7}
             >
-              <Text style={[styles.optionText, selected && styles.optionTextSelected]}>
-                {item}
-              </Text>
+              <Text style={styles.itemText}>{opt}</Text>
             </TouchableOpacity>
-          );
-        })}
+          ))}
+        </View>
+      )}
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 12,
-    overflow: 'hidden',
-  },
-  containerOpen: {
-    // 열렸을 때 그림자로 목록 구분
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.08,
-    shadowRadius: 8,
-    elevation: 4,
+  wrapper: {
+    position: 'relative',
+    zIndex: 10,
   },
   trigger: {
-    height: 58,
-    paddingHorizontal: 16,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    backgroundColor: '#FFFFFF',
+    height: 48,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    borderRadius: 8,
+    paddingHorizontal: 14,
+    backgroundColor: Colors.background,
   },
   triggerText: {
-    fontSize: 14,
-    color: '#1E1E1E',
+    fontSize: 15,
+    color: Colors.text,
   },
   placeholder: {
-    color: '#9C9C9C',
+    color: Colors.inactive,
   },
   arrow: {
-    fontSize: 10,
-    color: '#9C9C9C',
+    fontSize: 11,
+    color: Colors.textSecondary,
   },
-  option: {
-    height: 58,
-    paddingHorizontal: 16,
-    justifyContent: 'center',
-    backgroundColor: '#FFFFFF',
+  list: {
+    position: 'absolute',
+    top: 50,
+    left: 0,
+    right: 0,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    borderRadius: 8,
+    backgroundColor: Colors.background,
+    overflow: 'hidden',
+    elevation: 4,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 4,
   },
-  optionSelected: {
-    backgroundColor: '#FED4AE',
+  item: {
+    paddingVertical: 13,
+    paddingHorizontal: 14,
+    borderBottomWidth: 1,
+    borderBottomColor: Colors.border,
   },
-  optionText: {
-    fontSize: 14,
-    color: '#1E1E1E',
-  },
-  optionTextSelected: {
-    color: '#FF7800',
+  itemText: {
+    fontSize: 15,
+    color: Colors.text,
   },
 });

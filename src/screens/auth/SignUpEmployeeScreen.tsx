@@ -2,10 +2,10 @@ import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { Colors } from '../../constants/colors';
 
-export default function StoreConfirmScreen() {
+export default function SignUpEmployeeScreen() {
   return (
     <View style={styles.container}>
-      <Text style={styles.text}>매장 등록 확인 / 완료</Text>
+      <Text style={styles.text}>회원가입 - 직원용</Text>
     </View>
   );
 }
