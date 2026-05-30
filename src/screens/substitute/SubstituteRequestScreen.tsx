@@ -175,46 +175,6 @@ const mc = StyleSheet.create({
   msg:        { flex: 1, fontSize: 12, color: '#AAAAAA' },
 });
 
-// ── Standalone bottom tab bar (Stack 화면에서 탭바 표시용) ─────────────────
-
-function BottomBar() {
-  const navigation = useNavigation<Nav>();
-
-  const TABS = [
-    { key: 'home',  label: '홈',    icon: '🏠', onPress: () => navigation.navigate('Main')    },
-    { key: 'cal',   label: '캘린더', icon: '📅', onPress: () => navigation.navigate('Main')    },
-    { key: 'chat',  label: '메세지', icon: '💬', onPress: () => navigation.navigate('Main')    },
-    { key: 'notif', label: '알림',  icon: '🔔', onPress: () => {}                              },
-    { key: 'todo',  label: '할일',  icon: '✅', onPress: () => navigation.navigate('ToDoList') },
-  ];
-
-  return (
-    <View style={tb.container}>
-      {TABS.map((t) => {
-        const isActive = t.key === 'notif';
-        return (
-          <TouchableOpacity key={t.key} style={tb.tab} onPress={t.onPress} activeOpacity={0.7}>
-            <Text style={tb.icon}>{t.icon}</Text>
-            <Text style={[tb.label, isActive && tb.labelActive]}>{t.label}</Text>
-          </TouchableOpacity>
-        );
-      })}
-    </View>
-  );
-}
-
-const tb = StyleSheet.create({
-  container: {
-    flexDirection: 'row', height: 60,
-    backgroundColor: '#FFFFFF',
-    borderTopWidth: 1, borderTopColor: '#EEEEEE',
-  },
-  tab:  { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 2 },
-  icon: { fontSize: 20 },
-  label: { fontSize: 10, color: '#AAAAAA', fontWeight: '500' },
-  labelActive: { color: Colors.primary, fontWeight: '700' },
-});
-
 // ── Main screen ────────────────────────────────────────────────────────────
 
 export default function SubstituteRequestScreen() {
@@ -301,9 +261,6 @@ export default function SubstituteRequestScreen() {
       >
         <Text style={s.fabIcon}>+</Text>
       </TouchableOpacity>
-
-      {/* ── Standalone bottom tab bar ── */}
-      <BottomBar />
     </SafeAreaView>
   );
 }
@@ -349,7 +306,7 @@ const s = StyleSheet.create({
 
   /* FAB */
   fab: {
-    position: 'absolute', bottom: 80, right: 20,
+    position: 'absolute', bottom: 20, right: 20,
     width: 54, height: 54, borderRadius: 27,
     backgroundColor: Colors.primary,
     alignItems: 'center', justifyContent: 'center',

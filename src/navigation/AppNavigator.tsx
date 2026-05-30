@@ -43,6 +43,9 @@ import AiSubstituteListScreen from '../screens/substitute/AiSubstituteListScreen
 import AiSubstituteScheduleScreen from '../screens/substitute/AiSubstituteScheduleScreen';
 import AiSubstituteTimeScreen from '../screens/substitute/AiSubstituteTimeScreen';
 
+// Notification screen
+import NotificationScreen from '../screens/NotificationScreen';
+
 // Chat screens
 import PersonalChatScreen from '../screens/chat/PersonalChatScreen';
 import GroupChatScreen from '../screens/chat/GroupChatScreen';
@@ -52,6 +55,7 @@ export type TabParamList = {
   Calendar: undefined;
   Chat: undefined;
   Notification: undefined;
+  Todo: undefined;
 };
 
 export type RootStackParamList = {
@@ -86,6 +90,8 @@ export type RootStackParamList = {
   AiSubstituteList: undefined;
   AiSubstituteSchedule: undefined;
   AiSubstituteTime: undefined;
+  // Notification
+  NotificationScreen: undefined;
   // Chat
   PersonalChat: undefined;
   GroupChat: undefined;
@@ -103,7 +109,8 @@ function MainTabs() {
       <Tab.Screen name="Home" component={HomeScreen} />
       <Tab.Screen name="Calendar" component={CalendarScreen} />
       <Tab.Screen name="Chat" component={ChatScreen} />
-      <Tab.Screen name="Notification" component={ToDoListScreen} />
+      <Tab.Screen name="Notification" component={NotificationScreen} />
+      <Tab.Screen name="Todo" component={ToDoListScreen} />
     </Tab.Navigator>
   );
 }
@@ -159,6 +166,9 @@ export default function AppNavigator() {
           component={AiSubstituteTimeScreen}
           options={{ presentation: 'transparentModal' }}
         />
+
+        {/* Notification */}
+        <Stack.Screen name="NotificationScreen" component={NotificationScreen} />
 
         {/* Chat */}
         <Stack.Screen name="PersonalChat" component={PersonalChatScreen} />
