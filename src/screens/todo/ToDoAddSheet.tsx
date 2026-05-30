@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState } from 'react';
 import {
   View,
   Text,
@@ -10,18 +10,15 @@ import {
   Pressable,
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
-import { Colors } from '../../constants/colors';
+
+const SHEET_HEIGHT = 393;
 
 export default function ToDoAddSheet() {
   const navigation = useNavigation();
   const [text, setText] = useState('');
-  const inputRef = useRef<TextInput>(null);
-
-  const canAdd = text.trim().length > 0;
 
   const handleAdd = () => {
-    if (!canAdd) return;
-    // In a real app, this would pass the new item back via params or a shared store.
+    if (!text.trim()) return;
     navigation.goBack();
   };
 
@@ -32,31 +29,33 @@ export default function ToDoAddSheet() {
         style={styles.kav}
       >
         <Pressable style={styles.sheet} onPress={() => {}}>
-          {/* Handle */}
-          <View style={styles.handle} />
+          {/* 핸들 */}
+          <View style={styles.handleRow}>
+            <View style={styles.handle} />
+          </View>
 
-          <Text style={styles.title}>할 일 추가</Text>
+          {/* 입력 카드 */}
+          <View style={styles.inputCard}>
+            <Text style={styles.inputIcon}>✎</Text>
+            <TextInput
+              style={styles.input}
+              placeholder="내용을 입력해주세요"
+              placeholderTextColor="#BBBBBB"
+              value={text}
+              onChangeText={setText}
+              autoFocus
+              returnKeyType="done"
+              onSubmitEditing={handleAdd}
+              maxLength={100}
+            />
+          </View>
 
-          {/* Input */}
-          <TextInput
-            ref={inputRef}
-            style={styles.input}
-            placeholder="할 일을 입력하세요"
-            placeholderTextColor="#BBBBBB"
-            value={text}
-            onChangeText={setText}
-            autoFocus
-            returnKeyType="done"
-            onSubmitEditing={handleAdd}
-            maxLength={100}
-          />
-
-          {/* Add button */}
+          {/* TO-DO 추가 버튼 */}
           <TouchableOpacity
-            style={[styles.addBtn, !canAdd && styles.addBtnDisabled]}
+            style={[styles.addBtn, !text.trim() && styles.addBtnDisabled]}
             onPress={handleAdd}
             activeOpacity={0.85}
-            disabled={!canAdd}
+            disabled={!text.trim()}
           >
             <Text style={styles.addBtnText}>TO-DO 추가</Text>
           </TouchableOpacity>
@@ -69,55 +68,69 @@ export default function ToDoAddSheet() {
 const styles = StyleSheet.create({
   backdrop: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.45)',
+    backgroundColor: 'rgba(0,0,0,0.25)',
     justifyContent: 'flex-end',
   },
   kav: {
     justifyContent: 'flex-end',
   },
   sheet: {
+    height: SHEET_HEIGHT,
     backgroundColor: '#FFFFFF',
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
-    paddingHorizontal: 20,
-    paddingTop: 12,
+    borderTopLeftRadius: 15,
+    borderTopRightRadius: 15,
+    alignItems: 'center',
+    paddingHorizontal: 28,
     paddingBottom: Platform.OS === 'ios' ? 40 : 24,
-    gap: 16,
+  },
+  handleRow: {
+    width: '100%',
+    alignItems: 'center',
+    paddingTop: 16,
+    paddingBottom: 32,
   },
   handle: {
     width: 40,
-    height: 4,
-    borderRadius: 2,
-    backgroundColor: '#DDDDDD',
-    alignSelf: 'center',
-    marginBottom: 4,
+    height: 5,
+    borderRadius: 15,
+    backgroundColor: '#E9F1FF',
   },
-  title: {
-    fontSize: 17,
-    fontWeight: '700',
-    color: '#1A1A1A',
-    textAlign: 'center',
+  inputCard: {
+    width: '100%',
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#E9F1FF',
+    borderRadius: 16,
+    paddingHorizontal: 16,
+    paddingVertical: 16,
+    marginBottom: 32,
+    gap: 10,
+  },
+  inputIcon: {
+    fontSize: 18,
+    color: '#848A94',
   },
   input: {
-    backgroundColor: '#F5F5F5',
-    borderRadius: 12,
-    paddingHorizontal: 16,
-    paddingVertical: 14,
-    fontSize: 15,
-    color: '#1A1A1A',
-    minHeight: 50,
+    flex: 1,
+    fontSize: 14,
+    fontWeight: '500',
+    color: '#000000',
+    padding: 0,
   },
   addBtn: {
-    backgroundColor: Colors.primary,
-    borderRadius: 12,
-    paddingVertical: 15,
+    width: 250,
+    height: 40,
+    backgroundColor: '#FF8C00',
+    borderRadius: 5,
     alignItems: 'center',
+    justifyContent: 'center',
   },
   addBtnDisabled: {
     backgroundColor: '#FFCCAA',
   },
   addBtnText: {
-    fontSize: 16,
+    fontSize: 14,
     fontWeight: '700',
     color: '#FFFFFF',
   },

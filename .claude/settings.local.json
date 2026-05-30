@@ -16,7 +16,8 @@
       "Bash(npx expo *)",
       "Bash(git ls-tree *)",
       "Bash(npx tsc *)",
-      "Bash(findstr /r \"clipboard\" package.json)"
+      "Bash(findstr /r \"clipboard\" package.json)",
+      "Bash(npm install *)"
     ]
   }
 }

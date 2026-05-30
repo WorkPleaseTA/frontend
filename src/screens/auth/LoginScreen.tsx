@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { View, Text, TextInput, StyleSheet, KeyboardAvoidingView, Platform } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import Header from '../../components/Header';
 import OrangeButton from '../../components/OrangeButton';
 import { RootStackParamList } from '../../navigation/AppNavigator';
@@ -45,7 +46,15 @@ export default function LoginScreen() {
         <View style={styles.buttonWrap}>
           <OrangeButton
             title="다음"
-            onPress={() => navigation.navigate('Main')}
+            onPress={async () => {
+              // TODO: 실제 API 연동 시 서버 응답의 role로 교체
+              const role = await AsyncStorage.getItem('userRole');
+              if (role === 'manager') {
+                navigation.navigate('Main');
+              } else {
+                navigation.navigate('EmployeeMain');
+              }
+            }}
             style={styles.btnOverride}
             textStyle={styles.btnText}
           />
