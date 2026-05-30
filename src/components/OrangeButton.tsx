@@ -1,22 +1,30 @@
 import React from 'react';
-import { TouchableOpacity, Text, StyleSheet } from 'react-native';
+import { TouchableOpacity, Text, StyleSheet, ActivityIndicator, StyleProp, ViewStyle, TextStyle } from 'react-native';
 import { Colors } from '../constants/colors';
 
 interface OrangeButtonProps {
   title: string;
   onPress: () => void;
   disabled?: boolean;
+  loading?: boolean;
+  secondary?: boolean;
+  style?: StyleProp<ViewStyle>;
+  textStyle?: StyleProp<TextStyle>;
 }
 
-export default function OrangeButton({ title, onPress, disabled = false }: OrangeButtonProps) {
+export default function OrangeButton({ title, onPress, disabled = false, loading = false, secondary = false, style, textStyle }: OrangeButtonProps) {
   return (
     <TouchableOpacity
-      style={[styles.button, disabled && styles.disabled]}
+      style={[styles.button, secondary && styles.secondary, disabled && styles.disabled, style]}
       onPress={onPress}
-      disabled={disabled}
+      disabled={disabled || loading}
       activeOpacity={0.8}
     >
-      <Text style={styles.text}>{title}</Text>
+      {loading ? (
+        <ActivityIndicator color={Colors.white} />
+      ) : (
+        <Text style={[styles.text, textStyle]}>{title}</Text>
+      )}
     </TouchableOpacity>
   );
 }
@@ -24,14 +32,17 @@ export default function OrangeButton({ title, onPress, disabled = false }: Orang
 const styles = StyleSheet.create({
   button: {
     backgroundColor: Colors.primary,
-    borderRadius: 8,
     height: 52,
+    borderRadius: 8,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingHorizontal: 16,
+    width: '100%',
+  },
+  secondary: {
+    backgroundColor: Colors.inactive,
   },
   disabled: {
-    backgroundColor: Colors.inactive,
+    opacity: 0.5,
   },
   text: {
     color: Colors.white,

@@ -55,10 +55,10 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     fontSize: 17,
     fontWeight: '600',
-    color: Colors.text.primary,
+    color: Colors.text,
   },
   back: {
     fontSize: 22,
-    color: Colors.text.primary,
+    color: Colors.text,
   },
 });

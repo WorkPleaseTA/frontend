@@ -28,9 +28,9 @@ import FixedScheduleScreen from '../screens/schedule/FixedScheduleScreen';
 import FixedScheduleBottomSheet from '../screens/schedule/FixedScheduleBottomSheet';
 
 // ToDo screens
-import ToDoListScreen from '../screens/todo/ToDoListScreen';
-import ToDoEditScreen from '../screens/todo/ToDoEditScreen';
-import ToDoAddSheet from '../screens/todo/ToDoAddSheet';
+import ToDoListScreen from '../screens/todo/TodoListScreen';
+import ToDoEditScreen from '../screens/todo/TodoEditScreen';
+import ToDoAddSheet from '../screens/todo/TodoAddBottomSheet';
 
 // Store screen
 import StoreManagementScreen from '../screens/store/StoreManagementScreen';

@@ -82,7 +82,7 @@ export function BottomTabBarStatic({ activeIndex }: { activeIndex: number }) {
   const navigation = useNavigation();
 
   const handlePress = (tabName: string) => {
-    navigation.navigate('Main' as never, { screen: tabName } as never);
+    (navigation as any).navigate('Main', { screen: tabName });
   };
 
   return (
