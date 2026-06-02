@@ -46,7 +46,7 @@ export default function ToDoListScreen() {
       {/* Header */}
       <View style={styles.header}>
         <Text style={styles.headerTitle}>TO-DO LIST</Text>
-        <View style={styles.backBtn} />
+        <View style={{ width: 36 }} />
       </View>
 
       {/* Progress summary */}

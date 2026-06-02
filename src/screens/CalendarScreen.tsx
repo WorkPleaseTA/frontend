@@ -7,7 +7,13 @@ import {
   TouchableOpacity,
   ScrollView,
 } from 'react-native';
+import { useNavigation, useRoute } from '@react-navigation/native';
+import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import type { CalendarStackParamList } from '../navigation/AppNavigator';
+import { MaterialIcons } from '@expo/vector-icons';
 import { Colors } from '../constants/colors';
+
+type Nav = NativeStackNavigationProp<CalendarStackParamList>;
 
 // ── Constants ──────────────────────────────────────────────────────────────
 
@@ -403,6 +409,9 @@ const empStyles = StyleSheet.create({
 // ── Main screen ────────────────────────────────────────────────────────────
 
 export default function CalendarScreen() {
+  const navigation = useNavigation<Nav>();
+  const route = useRoute();
+  const isManager = (route.params as any)?.isManager === true;
   const [year, setYear] = useState(THIS_YEAR);
   const [month, setMonth] = useState(THIS_MONTH);
   const [selectedDay, setSelectedDay] = useState<number | null>(TODAY_DATE);
@@ -423,6 +432,14 @@ export default function CalendarScreen() {
       {/* Header */}
       <View style={styles.header}>
         <Text style={styles.headerTitle}>캘린더</Text>
+        {isManager && (
+          <TouchableOpacity
+            onPress={() => navigation.navigate('FixedSchedule')}
+            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+          >
+            <MaterialIcons name="edit" size={20} color="#FF8D28" />
+          </TouchableOpacity>
+        )}
       </View>
 
       <ScrollView
@@ -456,6 +473,9 @@ export default function CalendarScreen() {
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: '#F4F4F8' },
   header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
     paddingHorizontal: 20,
     paddingVertical: 16,
     backgroundColor: '#F4F4F8',

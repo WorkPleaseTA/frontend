@@ -3,31 +3,45 @@ import {
   View,
   Text,
   StyleSheet,
-  FlatList,
   TouchableOpacity,
   SafeAreaView,
   ScrollView,
 } from 'react-native';
+import { useNavigation } from '@react-navigation/native';
+import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import type { HomeStackParamList } from '../../navigation/AppNavigator';
 import { MaterialIcons } from '@expo/vector-icons';
+
+type Nav = NativeStackNavigationProp<HomeStackParamList>;
+
+// ── Mock data ──────────────────────────────────────────────────────────────
 
 interface ScheduleItem {
   id: string;
   name: string;
   time: string;
-  highlight: boolean;
+  active: boolean;
 }
 
 const SCHEDULE_DATA: ScheduleItem[] = [
-  { id: '1', name: '이주하', time: '08:00-09:00', highlight: false },
-  { id: '2', name: '김주영', time: '08:30-17:30', highlight: false },
-  { id: '3', name: '이하은', time: '13:00-20:00', highlight: true },
-  { id: '4', name: '정규람', time: '13:00-18:00', highlight: true },
-  { id: '5', name: '노민혁', time: '18:00-23:00', highlight: false },
+  { id: '1', name: '이주하', time: '08:00 - 09:00', active: false },
+  { id: '2', name: '김주영', time: '08:30 - 17:30', active: false },
+  { id: '3', name: '이하은', time: '13:00 - 20:00', active: true },
+  { id: '4', name: '정규람', time: '13:00 - 18:00', active: true },
+  { id: '5', name: '노민혁', time: '18:00 - 23:00', active: false },
 ];
 
+const TODO_DATA = [
+  { id: '1', text: '오전 9시 물류 정리' },
+  { id: '2', text: '오후 3시 쿠팡 택배 및 냉장고 정리' },
+];
+
+// ── Component ──────────────────────────────────────────────────────────────
+
 export default function HomeScreen() {
+  const navigation = useNavigation<Nav>();
   const [date, setDate] = useState(new Date(2026, 4, 9));
-  const [checked, setChecked] = useState(false);
+  const [checkedIds, setCheckedIds] = useState<string[]>([]);
 
   const formatDate = () => {
     const y = date.getFullYear();
@@ -44,130 +58,198 @@ export default function HomeScreen() {
     });
   };
 
-  const renderScheduleItem = ({ item }: { item: ScheduleItem }) => (
-    <View style={[styles.scheduleCard, item.highlight && styles.scheduleCardActive]}>
-      <Text style={[styles.scheduleCardText, item.highlight && styles.scheduleCardTextWhite]}>
-        {item.name}
-      </Text>
-      <Text style={[styles.scheduleCardText, item.highlight && styles.scheduleCardTextWhite]}>
-        {item.time}
-      </Text>
-    </View>
-  );
+  const toggleCheck = (id: string) =>
+    setCheckedIds(prev =>
+      prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]
+    );
 
   return (
-    <SafeAreaView style={styles.safeArea}>
+    <SafeAreaView style={s.safe}>
+      {/* ── 상단 헤더 ── */}
+      <View style={s.topHeader}>
+        <TouchableOpacity
+          style={s.infoBtn}
+          activeOpacity={0.7}
+          onPress={() => navigation.navigate('StoreManagement')}
+        >
+          <Text style={s.infoBtnText}>i</Text>
+        </TouchableOpacity>
+        <Text style={s.topTitle}>Home</Text>
+        <View style={{ width: 32 }} />
+      </View>
+
+      {/* ── 날짜 네비게이터 ── */}
+      <View style={s.dateRow}>
+        <TouchableOpacity
+          onPress={() => changeDate(-1)}
+          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+        >
+          <Text style={s.arrow}>←</Text>
+        </TouchableOpacity>
+        <Text style={s.dateText}>{formatDate()}</Text>
+        <TouchableOpacity
+          onPress={() => changeDate(1)}
+          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+        >
+          <Text style={s.arrow}>→</Text>
+        </TouchableOpacity>
+      </View>
+
       <ScrollView
-        style={styles.scroll}
-        contentContainerStyle={styles.content}
         showsVerticalScrollIndicator={false}
+        contentContainerStyle={s.scroll}
       >
-        {/* 날짜 헤더 */}
-        <View style={styles.dateRow}>
+        {/* ── 오늘의 스케줄 ── */}
+        <View style={s.section}>
           <TouchableOpacity
-            onPress={() => changeDate(-1)}
-            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+            style={s.sectionHeader}
+            onPress={() => navigation.navigate('Calendar')}
+            activeOpacity={0.7}
           >
-            <Text style={styles.arrowText}>{'<'}</Text>
+            <Text style={s.sectionTitle}>오늘의 스케줄</Text>
+            <Text style={s.sectionArrow}>›</Text>
           </TouchableOpacity>
-          <Text style={styles.dateText}>{formatDate()}</Text>
-          <TouchableOpacity
-            onPress={() => changeDate(1)}
-            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-          >
-            <Text style={styles.arrowText}>{'>'}</Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={styles.editButton}
-            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-          >
-            <MaterialIcons name="edit" size={20} color="#FF8D28" />
-          </TouchableOpacity>
-        </View>
 
-        {/* 오늘의 스케줄 */}
-        <Text style={styles.sectionLabel}>오늘의 스케줄</Text>
-        <FlatList
-          data={SCHEDULE_DATA}
-          keyExtractor={item => item.id}
-          renderItem={renderScheduleItem}
-          scrollEnabled={false}
-          ItemSeparatorComponent={() => <View style={styles.separator} />}
-        />
-
-        {/* 대타 정보 카드 */}
-        <View style={styles.substituteCard}>
-          <Text style={styles.subTime}>08:00 ~ 09:00</Text>
-          <View style={styles.subLabels}>
-            <Text style={styles.subLabel}>결근자 정미희</Text>
-            <Text style={styles.subLabel}>대체자 이주하</Text>
+          <View style={s.cardList}>
+            {SCHEDULE_DATA.map((item, idx) => (
+              <View
+                key={item.id}
+                style={[s.scheduleCard, item.active && s.scheduleCardActive]}
+              >
+                <Text style={[s.scheduleText, item.active && s.scheduleTextActive]}>
+                  {item.name}
+                </Text>
+                <Text style={[s.scheduleText, item.active && s.scheduleTextActive]}>
+                  {item.time}
+                </Text>
+              </View>
+            ))}
           </View>
         </View>
 
-        {/* 오늘의 할 일 */}
-        <Text style={styles.sectionLabel}>오늘의 할 일</Text>
-        <View style={styles.todoCard}>
-          <Text style={styles.todoText}>오전 9시 물류 정리</Text>
-          <TouchableOpacity style={styles.checkbox} onPress={() => setChecked(p => !p)}>
-            {checked && <MaterialIcons name="check" size={16} color="#FFFFFF" />}
+        {/* ── 오늘의 스케줄 변동 ── */}
+        <View style={s.section}>
+          <TouchableOpacity style={s.sectionHeader} activeOpacity={0.7}>
+            <Text style={s.sectionTitle}>오늘의 스케줄 변동</Text>
+            <Text style={s.sectionArrow}>›</Text>
           </TouchableOpacity>
+
+          <View style={s.substituteCard}>
+            <Text style={s.subTime}>08:00 ~ 09:00</Text>
+
+            <View style={s.subPerson}>
+              <Text style={s.subLabel}>결근자</Text>
+              <Text style={s.subName}>정미희</Text>
+            </View>
+
+            <View style={s.subDivider} />
+
+            <View style={s.subPerson}>
+              <Text style={s.subLabel}>대체자</Text>
+              <Text style={s.subName}>이주하</Text>
+            </View>
+          </View>
+        </View>
+
+        {/* ── 오늘의 할 일 ── */}
+        <View style={s.section}>
+          <TouchableOpacity style={s.sectionHeader} activeOpacity={0.7}>
+            <Text style={s.sectionTitle}>오늘의 할 일</Text>
+            <Text style={s.sectionArrow}>›</Text>
+          </TouchableOpacity>
+
+          <View style={s.cardList}>
+            {TODO_DATA.map(item => {
+              const done = checkedIds.includes(item.id);
+              return (
+                <View key={item.id} style={s.todoCard}>
+                  <Text style={s.todoText}>{item.text}</Text>
+                  <TouchableOpacity
+                    style={[s.checkbox, done && s.checkboxDone]}
+                    onPress={() => toggleCheck(item.id)}
+                    activeOpacity={0.7}
+                    hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+                  >
+                    {done && <MaterialIcons name="check" size={14} color="#FFFFFF" />}
+                  </TouchableOpacity>
+                </View>
+              );
+            })}
+          </View>
         </View>
       </ScrollView>
     </SafeAreaView>
   );
 }
 
-const styles = StyleSheet.create({
-  safeArea: {
-    flex: 1,
-    backgroundColor: '#FFFFFF',
-  },
-  scroll: {
-    flex: 1,
-  },
-  content: {
+// ── Styles ─────────────────────────────────────────────────────────────────
+
+const s = StyleSheet.create({
+  safe: { flex: 1, backgroundColor: '#FFFFFF' },
+
+  /* 상단 헤더 */
+  topHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
     paddingHorizontal: 20,
-    paddingBottom: 30,
+    paddingTop: 12,
+    paddingBottom: 4,
+  },
+  infoBtn: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    borderWidth: 2,
+    borderColor: '#1A1A1A',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  infoBtnText: { fontSize: 13, fontWeight: '800', color: '#1A1A1A' },
+  topTitle: {
+    flex: 1,
+    textAlign: 'center',
+    fontSize: 20,
+    fontWeight: '500',
+    color: '#000000',
   },
 
-  // 날짜 헤더
+  /* 날짜 네비게이터 */
   dateRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 20,
+    paddingVertical: 12,
+    paddingHorizontal: 20,
+    gap: 20,
   },
-  arrowText: {
-    fontSize: 18,
-    color: '#61656C',
-    paddingHorizontal: 16,
-  },
-  dateText: {
-    fontSize: 25,
-    fontWeight: '600',
-    color: '#1A1A1A',
-  },
-  editButton: {
-    position: 'absolute',
-    right: 0,
+  arrow: { fontSize: 18, color: '#61656C' },
+  dateText: { fontSize: 25, fontWeight: '600', color: '#000000' },
+
+  /* ScrollView */
+  scroll: {
+    paddingHorizontal: 20,
+    paddingBottom: 32,
+    gap: 20,
   },
 
-  // 섹션 라벨
-  sectionLabel: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#AAAAAA',
-    marginTop: 24,
-    marginBottom: 12,
-  },
-
-  // 스케줄 카드
-  scheduleCard: {
-    height: 36,
+  /* 섹션 공통 */
+  section: { gap: 10 },
+  sectionHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: 14,
+  },
+  sectionTitle: { fontSize: 16, fontWeight: '700', color: '#000000' },
+  sectionArrow: { fontSize: 18, color: '#AAAAAA' },
+  cardList: { gap: 8 },
+
+  /* 스케줄 카드 */
+  scheduleCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
     borderWidth: 1,
     borderColor: '#E9F1FF',
     borderRadius: 16,
@@ -177,63 +259,56 @@ const styles = StyleSheet.create({
     backgroundColor: '#FF8D28',
     borderColor: '#FF8D28',
   },
-  scheduleCardText: {
-    fontSize: 13,
-    color: '#61656C',
-  },
-  scheduleCardTextWhite: {
-    color: '#FFFFFF',
-  },
-  separator: {
-    height: 8,
-  },
+  scheduleText: { fontSize: 13, color: '#61656C' },
+  scheduleTextActive: { color: '#FFFFFF' },
 
-  // 대타 정보 카드
+  /* 스케줄 변동 카드 */
   substituteCard: {
-    marginTop: 8,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 14,
     borderWidth: 1,
     borderColor: '#E9F1FF',
     borderRadius: 16,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
+    backgroundColor: '#FFFFFF',
+    gap: 12,
   },
-  subTime: {
-    fontSize: 12,
-    color: '#757575',
-  },
-  subLabels: {
-    alignItems: 'flex-end',
-    gap: 2,
-  },
-  subLabel: {
-    fontSize: 10,
-    color: '#FF8D28',
+  subTime: { fontSize: 12, color: '#757575', flex: 1 },
+  subPerson: { alignItems: 'center', gap: 2 },
+  subLabel: { fontSize: 10, color: '#FF8D28' },
+  subName: { fontSize: 14, fontWeight: '500', color: '#1A1A1A' },
+  subDivider: {
+    width: 1,
+    height: 32,
+    backgroundColor: '#E9F1FF',
   },
 
-  // TO-DO 카드
+  /* 할 일 카드 */
   todoCard: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: 14,
+    paddingHorizontal: 16,
     paddingVertical: 12,
     borderWidth: 1,
     borderColor: '#E9F1FF',
     borderRadius: 16,
+    backgroundColor: '#FFFFFF',
   },
-  todoText: {
-    fontSize: 14,
-    color: '#61656C',
-  },
+  todoText: { flex: 1, fontSize: 14, color: '#61656C', marginRight: 12 },
   checkbox: {
     width: 22,
     height: 22,
     borderRadius: 4,
-    backgroundColor: '#FF8D28',
+    borderWidth: 2,
+    borderColor: '#E6E6E6',
+    backgroundColor: '#E6E6E6',
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  checkboxDone: {
+    backgroundColor: '#FF8D28',
+    borderColor: '#FF8D28',
   },
 });

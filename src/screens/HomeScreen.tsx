@@ -139,7 +139,7 @@ const s = StyleSheet.create({
   infoBtnText: { fontSize: 13, fontWeight: '800', color: '#1A1A1A' },
   headerTitle: {
     flex: 1, textAlign: 'center',
-    fontSize: 17, fontWeight: '700', color: '#1A1A1A',
+    fontSize: 20, fontWeight: '500', color: '#000000',
   },
 
   /* ScrollView */

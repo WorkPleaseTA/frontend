@@ -17,7 +17,10 @@
       "Bash(git ls-tree *)",
       "Bash(npx tsc *)",
       "Bash(findstr /r \"clipboard\" package.json)",
-      "Bash(npm install *)"
+      "Bash(npm install *)",
+      "Bash(Remove-Item \"c:/Users/USER/Desktop/ilhaejo/src/screens/schedule/ScheduleInputScreen.tsx\" -Force)",
+      "Bash(Remove-Item \"c:/Users/USER/Desktop/ilhaejo/src/screens/schedule/ScheduleEditScreen.tsx\" -Force)",
+      "Bash(Write-Output \"deleted\")"
     ]
   }
 }

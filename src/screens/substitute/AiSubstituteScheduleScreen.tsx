@@ -6,6 +6,7 @@ import {
   SafeAreaView,
   TouchableOpacity,
   ScrollView,
+  Alert,
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -22,7 +23,6 @@ const START_HOUR = 8;
 const END_HOUR   = 24;
 const HOURS = Array.from({ length: END_HOUR - START_HOUR }, (_, i) => START_HOUR + i);
 
-// 셀 크기 (촘촘하게)
 const COL_W      = 36;
 const TIME_COL_W = 38;
 const ROW_H      = 22;
@@ -31,26 +31,29 @@ const HEADER_H   = 36;
 const MONTHS = ['1월','2월','3월','4월','5월','6월','7월','8월','9월','10월','11월','12월'];
 const WEEKS  = ['1주차','2주차','3주차','4주차','5주차'];
 
-// 대타 가능/불가 시간 (day 0=월)
-const AVAILABLE: Record<number, [number, number]> = {
-  0: [9, 18],
-  2: [9, 18],
-  4: [13, 22],
+// 고정 스케줄 — 회색, 변경 불가 (근무 중이라 대타 불가)
+const FIXED_SCHEDULE: Record<number, number[]> = {
+  1: [10, 11, 12, 13],             // 화 10:00-14:00
+  3: [9,  10, 11, 12],             // 목 09:00-13:00
+  6: [10, 11, 12, 13, 14, 15],     // 일 10:00-16:00
 };
-const UNAVAILABLE: Record<number, [number, number]> = {
-  1: [10, 14],
-  3: [9, 13],
-  6: [10, 16],
-};
+
+// 대타 가능 초기값 — 주황, 사용자가 수정 가능
+function buildInitialAvailable(): Record<number, number[]> {
+  return {
+    0: Array.from({ length: 9 }, (_, i) => 9  + i),  // 월 09~17
+    2: Array.from({ length: 9 }, (_, i) => 9  + i),  // 수 09~17
+    4: Array.from({ length: 9 }, (_, i) => 13 + i),  // 금 13~21
+  };
+}
 
 // ── Week date helpers ──────────────────────────────────────────────────────
 
 function getWeekDates(monthIdx: number, weekIdx: number): Date[] {
-  // 해당 월의 weekIdx번째 주 월~일 계산
   const first = new Date(new Date().getFullYear(), monthIdx, 1);
   const firstMon = new Date(first);
   const dow = first.getDay();
-  firstMon.setDate(1 - ((dow + 6) % 7)); // 첫 번째 월요일
+  firstMon.setDate(1 - ((dow + 6) % 7));
   firstMon.setDate(firstMon.getDate() + weekIdx * 7);
   return Array.from({ length: 7 }, (_, i) => {
     const d = new Date(firstMon);
@@ -68,11 +71,7 @@ function isToday(d: Date) {
 
 // ── Dropdown ───────────────────────────────────────────────────────────────
 
-function Dropdown({
-  options,
-  selectedIndex,
-  onSelect,
-}: {
+function Dropdown({ options, selectedIndex, onSelect }: {
   options: string[];
   selectedIndex: number;
   onSelect: (i: number) => void;
@@ -135,7 +134,27 @@ const dd = StyleSheet.create({
 
 // ── Schedule grid ──────────────────────────────────────────────────────────
 
-function WeekGrid({ dates }: { dates: Date[] }) {
+function WeekGrid({
+  dates,
+  editMode,
+  availableHours,
+  onToggleHour,
+}: {
+  dates: Date[];
+  editMode: boolean;
+  availableHours: Record<number, number[]>;
+  onToggleHour: (dayIdx: number, hour: number) => void;
+}) {
+  const handleCellPress = (dayIdx: number, hour: number) => {
+    if (!editMode) return;
+    const isFixed = FIXED_SCHEDULE[dayIdx]?.includes(hour);
+    if (isFixed) {
+      Alert.alert('변경 불가', '고정 스케줄은 변경할 수 없습니다.');
+      return;
+    }
+    onToggleHour(dayIdx, hour);
+  };
+
   return (
     <View style={g.card}>
       {/* Legend */}
@@ -145,9 +164,15 @@ function WeekGrid({ dates }: { dates: Date[] }) {
           <Text style={g.legendText}>대타 가능</Text>
         </View>
         <View style={g.legendItem}>
-          <View style={[g.legendDot, { backgroundColor: '#DEDEDE' }]} />
-          <Text style={g.legendText}>대타 불가</Text>
+          <View style={[g.legendDot, { backgroundColor: '#E0E0E0' }]} />
+          <Text style={g.legendText}>고정 스케줄 (변경 불가)</Text>
         </View>
+        {editMode && (
+          <View style={g.legendItem}>
+            <View style={[g.legendDot, { backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: '#DDDDDD' }]} />
+            <Text style={[g.legendText, { color: Colors.primary }]}>터치하여 설정</Text>
+          </View>
+        )}
       </View>
 
       <ScrollView horizontal showsHorizontalScrollIndicator={false}>
@@ -170,12 +195,7 @@ function WeekGrid({ dates }: { dates: Date[] }) {
                     today && g.todayHeader,
                   ]}
                 >
-                  <Text style={[
-                    g.dayLabel,
-                    isSat && g.satText,
-                    isSun && g.sunText,
-                    today && g.todayText,
-                  ]}>
+                  <Text style={[g.dayLabel, isSat && g.satText, isSun && g.sunText, today && g.todayText]}>
                     {day}
                   </Text>
                   <View style={[g.datePill, today && g.datePillToday]}>
@@ -196,39 +216,23 @@ function WeekGrid({ dates }: { dates: Date[] }) {
                   <Text style={g.timeText}>{h}:00</Text>
                 </View>
                 {DAY_LABELS.map((_, di) => {
-                  const avail   = AVAILABLE[di];
-                  const unavail = UNAVAILABLE[di];
-                  const inAvail   = !!(avail   && h >= avail[0]   && h < avail[1]);
-                  const inUnavail = !!(unavail  && h >= unavail[0] && h < unavail[1]);
-                  const isAvailStart = !!(avail   && h === avail[0]);
-                  const isAvailEnd   = !!(avail   && h === avail[1] - 1);
-                  const isUnavStart  = !!(unavail && h === unavail[0]);
-                  const isUnavEnd    = !!(unavail && h === unavail[1] - 1);
-                  const today = isToday(dates[di]);
+                  const isFixed = !!FIXED_SCHEDULE[di]?.includes(h);
+                  const isAvail = !!availableHours[di]?.includes(h);
+                  const today   = isToday(dates[di]);
 
                   return (
-                    <View
+                    <TouchableOpacity
                       key={di}
+                      activeOpacity={editMode ? 0.6 : 1}
+                      onPress={() => handleCellPress(di, h)}
                       style={[
                         g.cell,
                         today && g.cellToday,
-                        inAvail   && g.availCell,
-                        inUnavail && g.unavailCell,
-                        inAvail   && isAvailStart && g.blockTop,
-                        inAvail   && isAvailEnd   && g.blockBottom,
-                        inUnavail && isUnavStart  && g.blockTop,
-                        inUnavail && isUnavEnd    && g.blockBottom,
+                        isFixed && g.fixedCell,
+                        isAvail && !isFixed && g.availCell,
+                        editMode && !isFixed && g.editableCell,
                       ]}
-                    >
-                      {isAvailStart && (
-                        <Text style={g.blockLabel}>{avail![0]}시</Text>
-                      )}
-                      {isUnavStart && (
-                        <Text style={[g.blockLabel, g.blockLabelGray]}>
-                          {unavail![0]}시
-                        </Text>
-                      )}
-                    </View>
+                    />
                   );
                 })}
               </View>
@@ -242,17 +246,12 @@ function WeekGrid({ dates }: { dates: Date[] }) {
 
 const g = StyleSheet.create({
   card: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 16,
-    overflow: 'hidden',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.06,
-    shadowRadius: 8,
-    elevation: 2,
+    backgroundColor: '#FFFFFF', borderRadius: 16, overflow: 'hidden',
+    shadowColor: '#000', shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.06, shadowRadius: 8, elevation: 2,
   },
   legendRow: {
-    flexDirection: 'row', gap: 14,
+    flexDirection: 'row', gap: 10, flexWrap: 'wrap',
     paddingHorizontal: 12, paddingVertical: 8,
     borderBottomWidth: 1, borderBottomColor: '#F2F2F2',
   },
@@ -280,10 +279,7 @@ const g = StyleSheet.create({
   satText: { color: '#4A90D9' },
   sunText: { color: '#E05555' },
   todayText: { color: Colors.primary },
-  datePill: {
-    width: 20, height: 20, borderRadius: 10,
-    alignItems: 'center', justifyContent: 'center',
-  },
+  datePill: { width: 20, height: 20, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
   datePillToday: { backgroundColor: Colors.primary },
   dateNum: { fontSize: 11, fontWeight: '700', color: '#333333' },
   dateNumToday: { color: '#FFFFFF' },
@@ -297,19 +293,16 @@ const g = StyleSheet.create({
     borderRightWidth: 1, borderRightColor: '#EEEEEE',
   },
   timeText: { fontSize: 9, color: '#CCCCCC' },
+
   cell: {
     width: COL_W, height: ROW_H,
     borderBottomWidth: 1, borderBottomColor: '#F5F5F5',
     borderRightWidth: 1, borderRightColor: '#F0F0F0',
-    alignItems: 'center', justifyContent: 'center',
   },
   cellToday: { backgroundColor: '#FFFBF8' },
-  availCell: { backgroundColor: '#FFE0B2' },
-  unavailCell: { backgroundColor: '#EBEBEB' },
-  blockTop: { borderTopLeftRadius: 4, borderTopRightRadius: 4 },
-  blockBottom: { borderBottomLeftRadius: 4, borderBottomRightRadius: 4 },
-  blockLabel: { fontSize: 8, fontWeight: '700', color: Colors.primary },
-  blockLabelGray: { color: '#999999' },
+  fixedCell: { backgroundColor: '#E0E0E0' },
+  availCell: { backgroundColor: '#FFD4A0' },
+  editableCell: { borderColor: '#FFE0C0' },
 });
 
 // ── Main screen ────────────────────────────────────────────────────────────
@@ -317,10 +310,26 @@ const g = StyleSheet.create({
 export default function AiSubstituteScheduleScreen() {
   const navigation = useNavigation<Nav>();
   const now = new Date();
-  const [monthIdx, setMonthIdx] = useState(now.getMonth());
-  const [weekIdx,  setWeekIdx]  = useState(0);
+  const [monthIdx,       setMonthIdx]       = useState(now.getMonth());
+  const [weekIdx,        setWeekIdx]         = useState(0);
+  const [editMode,       setEditMode]        = useState(false);
+  const [availableHours, setAvailableHours]  = useState<Record<number, number[]>>(buildInitialAvailable());
 
   const dates = getWeekDates(monthIdx, weekIdx);
+
+  const toggleHour = (dayIdx: number, hour: number) => {
+    setAvailableHours(prev => {
+      const current = prev[dayIdx] ?? [];
+      const next = current.includes(hour)
+        ? current.filter(h => h !== hour)
+        : [...current, hour].sort((a, b) => a - b);
+      return { ...prev, [dayIdx]: next };
+    });
+  };
+
+  const handleEditToggle = () => {
+    setEditMode(prev => !prev);
+  };
 
   return (
     <SafeAreaView style={s.safe}>
@@ -332,6 +341,13 @@ export default function AiSubstituteScheduleScreen() {
         <Text style={s.headerTitle}>대타 스케줄 관리</Text>
         <View style={s.placeholder} />
       </View>
+
+      {/* 수정 모드 안내 배너 */}
+      {editMode && (
+        <View style={s.editBanner}>
+          <Text style={s.editBannerText}>✏️ 수정 모드 — 빈 칸을 터치하여 대타 가능 시간대를 설정하세요</Text>
+        </View>
+      )}
 
       <ScrollView
         showsVerticalScrollIndicator={false}
@@ -353,16 +369,23 @@ export default function AiSubstituteScheduleScreen() {
         </View>
 
         {/* Grid */}
-        <WeekGrid dates={dates} />
+        <WeekGrid
+          dates={dates}
+          editMode={editMode}
+          availableHours={availableHours}
+          onToggleHour={toggleHour}
+        />
 
         {/* Buttons */}
         <View style={s.btnCol}>
           <TouchableOpacity
-            style={s.outlineBtn}
+            style={[s.outlineBtn, editMode && s.outlineBtnActive]}
             activeOpacity={0.85}
-            onPress={() => navigation.navigate('AiSubstituteTime')}
+            onPress={handleEditToggle}
           >
-            <Text style={s.outlineBtnText}>대타 가능 시간대 수정</Text>
+            <Text style={[s.outlineBtnText, editMode && s.outlineBtnTextActive]}>
+              {editMode ? '수정 완료' : '대타 가능 시간대 수정'}
+            </Text>
           </TouchableOpacity>
 
           <TouchableOpacity
@@ -374,6 +397,7 @@ export default function AiSubstituteScheduleScreen() {
           </TouchableOpacity>
         </View>
       </ScrollView>
+
       <BottomTabBarStatic activeIndex={3} />
     </SafeAreaView>
   );
@@ -381,6 +405,7 @@ export default function AiSubstituteScheduleScreen() {
 
 const s = StyleSheet.create({
   safe: { flex: 1, backgroundColor: '#F4F4F8' },
+
   header: {
     flexDirection: 'row', alignItems: 'center',
     paddingHorizontal: 16, paddingVertical: 14,
@@ -391,8 +416,21 @@ const s = StyleSheet.create({
   headerTitle: { flex: 1, textAlign: 'center', fontSize: 17, fontWeight: '700', color: '#1A1A1A' },
   placeholder: { width: 36 },
 
-  scroll: { padding: 16, gap: 14, paddingBottom: 40 },
+  editBanner: {
+    backgroundColor: '#FFF4EE',
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: '#FFD4A0',
+  },
+  editBannerText: {
+    fontSize: 12,
+    color: Colors.primary,
+    fontWeight: '500',
+    textAlign: 'center',
+  },
 
+  scroll: { padding: 16, gap: 14, paddingBottom: 40 },
   dropRow: { flexDirection: 'row', gap: 10, zIndex: 20 },
 
   btnCol: { gap: 10 },
@@ -401,7 +439,11 @@ const s = StyleSheet.create({
     borderRadius: 12, paddingVertical: 14, alignItems: 'center',
     backgroundColor: '#FFFFFF',
   },
+  outlineBtnActive: {
+    backgroundColor: Colors.primary,
+  },
   outlineBtnText: { fontSize: 15, fontWeight: '700', color: Colors.primary },
+  outlineBtnTextActive: { color: '#FFFFFF' },
   fillBtn: {
     backgroundColor: Colors.primary, borderRadius: 12,
     paddingVertical: 15, alignItems: 'center',

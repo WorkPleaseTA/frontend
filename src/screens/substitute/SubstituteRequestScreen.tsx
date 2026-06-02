@@ -175,10 +175,7 @@ const mc = StyleSheet.create({
   msg:        { flex: 1, fontSize: 12, color: '#AAAAAA' },
 });
 
-<<<<<<< HEAD
-=======
 
->>>>>>> 272a8d5 (feat: 모바일 레이아웃 최적화 및 에러 수정)
 // ── Main screen ────────────────────────────────────────────────────────────
 
 export default function SubstituteRequestScreen() {
@@ -200,9 +197,7 @@ export default function SubstituteRequestScreen() {
 
       {/* ── Header ── */}
       <View style={s.header}>
-        <TouchableOpacity onPress={() => navigation.goBack()} hitSlop={8} style={s.headerSide}>
-          <Text style={s.backArrow}>←</Text>
-        </TouchableOpacity>
+        <View style={s.headerSide} />
         <Text style={s.headerTitle}>대타 신청</Text>
         <TouchableOpacity style={s.headerSide} hitSlop={8}>
           <View style={s.hamburger}>

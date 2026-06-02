@@ -1,12 +1,13 @@
 import React from 'react';
 import { NavigationContainer } from '@react-navigation/native';
-import { createNativeStackNavigator } from '@react-navigation/native-stack';
+import { createNativeStackNavigator, NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 
 import BottomTabBar from '../components/BottomTabBar';
 
 // Tab screens
 import ManagerHomeScreen from '../screens/home/HomeScreen';
+import ManagerNotificationScreen from '../screens/home/ManagerNotificationScreen';
 import EmployeeHomeScreen from '../screens/HomeScreen';
 import NotificationScreen from '../screens/NotificationScreen';
 import CalendarScreen from '../screens/CalendarScreen';
@@ -51,6 +52,45 @@ import AiSubstituteTimeScreen from '../screens/substitute/AiSubstituteTimeScreen
 // Chat screens
 import PersonalChatScreen from '../screens/chat/PersonalChatScreen';
 import GroupChatScreen from '../screens/chat/GroupChatScreen';
+
+export type HomeStackParamList = {
+  HomeMain: undefined;
+  StoreManagement: undefined;
+};
+
+const HomeStack = createNativeStackNavigator<HomeStackParamList>();
+
+function ManagerHomeNavigator() {
+  return (
+    <HomeStack.Navigator screenOptions={{ headerShown: false }}>
+      <HomeStack.Screen name="HomeMain" component={ManagerHomeScreen} />
+      <HomeStack.Screen name="StoreManagement" component={StoreManagementScreen} />
+    </HomeStack.Navigator>
+  );
+}
+
+export type CalendarStackParamList = {
+  CalendarHome: { isManager?: boolean } | undefined;
+  FixedSchedule: undefined;
+};
+
+const CalendarStack = createNativeStackNavigator<CalendarStackParamList>();
+
+function ManagerCalendarNavigator() {
+  return (
+    <CalendarStack.Navigator screenOptions={{ headerShown: false }}>
+      <CalendarStack.Screen
+        name="CalendarHome"
+        component={CalendarScreen}
+        initialParams={{ isManager: true }}
+      />
+      <CalendarStack.Screen
+        name="FixedSchedule"
+        component={FixedScheduleScreen}
+      />
+    </CalendarStack.Navigator>
+  );
+}
 
 export type TabParamList = {
   Home: undefined;
@@ -112,10 +152,10 @@ function MainTabs() {
       tabBar={(props) => <BottomTabBar {...props} />}
       screenOptions={{ headerShown: false }}
     >
-      <Tab.Screen name="Home" component={ManagerHomeScreen} />
-      <Tab.Screen name="Calendar" component={CalendarScreen} />
+      <Tab.Screen name="Home" component={ManagerHomeNavigator} />
+      <Tab.Screen name="Calendar" component={ManagerCalendarNavigator} />
       <Tab.Screen name="Chat" component={ChatScreen} />
-      <Tab.Screen name="Notification" component={SubstituteRequestScreen} />
+      <Tab.Screen name="Notification" component={ManagerNotificationScreen} />
       <Tab.Screen name="Todo" component={ToDoListScreen} />
     </Tab.Navigator>
   );

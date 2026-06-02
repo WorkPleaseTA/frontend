@@ -10,6 +10,8 @@ import {
   KeyboardAvoidingView,
   Platform,
   Alert,
+  ScrollView,
+  Modal,
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { Colors } from '../../constants/colors';
@@ -72,17 +74,81 @@ function Bubble({ item, showSender }: { item: Msg; showSender: boolean }) {
   );
 }
 
-function AiTodoChip() {
+// 채팅에서 추출한 AI TO-DO 키워드 (실제로는 메시지 분석으로 생성)
+const AI_KEYWORDS = [
+  '오후 3시 쿠팡 택배 및 냉장고 정리',
+  '매장 바닥 청소',
+];
+
+function AiTodoSection() {
+  const [modalVisible, setModalVisible] = useState(false);
+  const [selectedIndices, setSelectedIndices] = useState<number[]>([]);
+
+  const toggleKeyword = (i: number) => {
+    setSelectedIndices(prev =>
+      prev.includes(i) ? prev.filter(idx => idx !== i) : [...prev, i]
+    );
+  };
+
   return (
-    <TouchableOpacity
-      style={styles.aiChip}
-      activeOpacity={0.8}
-      onPress={() => Alert.alert('AI TO-DO', '채팅 내용을 TO-DO 리스트로 변환합니다.')}
-    >
-      <Text style={styles.aiChipIcon}>✨</Text>
-      <Text style={styles.aiChipText}>AI TO-DO 리스트 자동 변환</Text>
-      <Text style={styles.aiChipArrow}>→</Text>
-    </TouchableOpacity>
+    <View style={styles.aiSection}>
+      <Text style={styles.aiSectionTitle}>AI TO-DO 리스트 자동 변환</Text>
+
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        contentContainerStyle={styles.aiRow}
+      >
+        {AI_KEYWORDS.map((kw, i) => {
+          const selected = selectedIndices.includes(i);
+          return (
+            <TouchableOpacity
+              key={i}
+              style={[styles.aiKeyword, selected && styles.aiKeywordSelected]}
+              activeOpacity={0.7}
+              onPress={() => toggleKeyword(i)}
+            >
+              <Text style={[styles.aiKeywordText, selected && styles.aiKeywordTextSelected]}>
+                {kw}
+              </Text>
+            </TouchableOpacity>
+          );
+        })}
+
+        <TouchableOpacity
+          style={styles.aiAddBtn}
+          activeOpacity={0.8}
+          onPress={() => setModalVisible(true)}
+        >
+          <Text style={styles.aiAddBtnText}>추가</Text>
+        </TouchableOpacity>
+      </ScrollView>
+
+      {/* 직접 추가 모달 */}
+      <Modal visible={modalVisible} transparent animationType="fade">
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalBox}>
+            <Text style={styles.modalTitle}>추가하시겠습니까?</Text>
+            <View style={styles.modalButtons}>
+              <TouchableOpacity
+                style={styles.modalCancelBtn}
+                onPress={() => setModalVisible(false)}
+                activeOpacity={0.7}
+              >
+                <Text style={styles.modalCancelText}>취소</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.modalConfirmBtn}
+                onPress={() => setModalVisible(false)}  // TODO: 실제 추가 로직 연결
+                activeOpacity={0.8}
+              >
+                <Text style={styles.modalConfirmText}>확인</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+    </View>
   );
 }
 
@@ -155,8 +221,8 @@ export default function GroupChatScreen() {
           onContentSizeChange={() => listRef.current?.scrollToEnd({ animated: false })}
         />
 
-        {/* ── AI TO-DO Chip ── */}
-        <AiTodoChip />
+        {/* ── AI TO-DO 자동 변환 영역 ── */}
+        <AiTodoSection />
 
         {/* ── Input bar ── */}
         <View style={styles.inputBar}>
@@ -317,31 +383,114 @@ const styles = StyleSheet.create({
   timeMe: { textAlign: 'right' },
   timeOther: { textAlign: 'left' },
 
-  /* AI TO-DO Chip */
-  aiChip: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginHorizontal: 14,
-    marginBottom: 8,
-    paddingHorizontal: 16,
-    paddingVertical: 11,
-    backgroundColor: '#FFF4EE',
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: '#FFD4B8',
+  /* AI TO-DO 영역 */
+  aiSection: {
+    backgroundColor: '#FFFFFF',
+    borderTopWidth: 1,
+    borderTopColor: '#E9E9E9',
+    paddingHorizontal: 14,
+    paddingTop: 10,
+    paddingBottom: 10,
     gap: 8,
   },
-  aiChipIcon: { fontSize: 16 },
-  aiChipText: {
-    flex: 1,
+  aiSectionTitle: {
     fontSize: 13,
     fontWeight: '600',
-    color: Colors.primary,
+    color: '#000000',
   },
-  aiChipArrow: {
+  aiRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingRight: 4,
+  },
+  aiKeyword: {
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#E9F1FF',
+    borderRadius: 20,
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+  },
+  aiKeywordSelected: {
+    backgroundColor: '#FF8D28',
+    borderWidth: 0,
+  },
+  aiKeywordText: {
+    fontSize: 12,
+    color: '#000000',
+  },
+  aiKeywordTextSelected: {
+    color: '#FFFFFF',
+  },
+  aiAddBtn: {
+    backgroundColor: '#FF8D28',
+    borderRadius: 20,
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+  },
+  aiAddBtnText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#FFFFFF',
+  },
+
+  /* 직접 추가 모달 */
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.4)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  modalBox: {
+    width: 280,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    paddingHorizontal: 24,
+    paddingVertical: 28,
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 12,
+    elevation: 8,
+    gap: 24,
+  },
+  modalTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#1A1A1A',
+    textAlign: 'center',
+  },
+  modalButtons: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  modalCancelBtn: {
+    flex: 1,
+    height: 44,
+    borderRadius: 10,
+    backgroundColor: '#F2F2F2',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  modalCancelText: {
     fontSize: 14,
-    color: Colors.primary,
-    fontWeight: '700',
+    fontWeight: '600',
+    color: '#888888',
+  },
+  modalConfirmBtn: {
+    flex: 1,
+    height: 44,
+    borderRadius: 10,
+    backgroundColor: '#FF8D28',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  modalConfirmText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#FFFFFF',
   },
 
   /* Input bar */
