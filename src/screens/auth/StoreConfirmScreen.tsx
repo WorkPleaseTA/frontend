@@ -38,7 +38,7 @@ export default function StoreConfirmScreen() {
 
           <TouchableOpacity
             style={[styles.btn, styles.yesBtn]}
-            onPress={() => navigation.navigate('SignUpComplete')}
+            onPress={() => navigation.navigate('Login')}
             activeOpacity={0.8}
           >
             <Text style={styles.btnText}>예</Text>

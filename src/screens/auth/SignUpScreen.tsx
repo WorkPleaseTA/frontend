@@ -2,6 +2,7 @@ import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import Header from '../../components/Header';
 import OrangeButton from '../../components/OrangeButton';
 import { RootStackParamList } from '../../navigation/AppNavigator';
@@ -10,6 +11,15 @@ type Nav = NativeStackNavigationProp<RootStackParamList>;
 
 export default function SignUpScreen() {
   const navigation = useNavigation<Nav>();
+
+  const handleSelectRole = async (role: 'manager' | 'employee') => {
+    await AsyncStorage.setItem('userRole', role);
+    if (role === 'manager') {
+      navigation.navigate('SignUpManager');
+    } else {
+      navigation.navigate('SignUpEmployee');
+    }
+  };
 
   return (
     <View style={styles.container}>
@@ -21,14 +31,14 @@ export default function SignUpScreen() {
         <View style={styles.buttons}>
           <OrangeButton
             title="관리자이신가요?"
-            onPress={() => navigation.navigate('SignUpManager')}
+            onPress={() => handleSelectRole('manager')}
             style={styles.btnOverride}
             textStyle={styles.btnText}
           />
           <OrangeButton
             title="직원인가요?"
             secondary
-            onPress={() => navigation.navigate('SignUpEmployee')}
+            onPress={() => handleSelectRole('employee')}
             style={[styles.btnOverride, styles.secondaryOverride]}
             textStyle={styles.btnText}
           />

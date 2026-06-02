@@ -79,7 +79,7 @@ export default function HomeScreen() {
             </View>
             <View style={s.scheduleTextCol}>
               <Text style={s.scheduleTime}>8:00 ~ 12:00</Text>
-              <Text style={s.scheduleCafe}>밀해조 카페</Text>
+              <Text style={s.scheduleCafe}>일해조 카페</Text>
             </View>
           </View>
         </View>

@@ -4,12 +4,13 @@ import { BottomTabBarProps } from '@react-navigation/bottom-tabs';
 import { useNavigation } from '@react-navigation/native';
 import { Colors } from '../constants/colors';
 
+// Unicode / emoji icons — no native font dependency
 const ICONS = {
-  home:     { active: '🏠', inactive: '🏠' },
-  calendar: { active: '📅', inactive: '📅' },
-  chat:     { active: '💬', inactive: '💬' },
-  bell:     { active: '🔔', inactive: '🔔' },
-  check:    { active: '✅', inactive: '☑️' },
+  home:      { active: '🏠', inactive: '🏠' },
+  calendar:  { active: '📅', inactive: '📅' },
+  chat:      { active: '💬', inactive: '💬' },
+  bell:      { active: '🔔', inactive: '🔔' },
+  check:     { active: '✅', inactive: '☑️' },
 };
 
 const TAB_META: Record<string, { label: string; iconKey: keyof typeof ICONS }> = {
@@ -21,41 +22,46 @@ const TAB_META: Record<string, { label: string; iconKey: keyof typeof ICONS }> =
 };
 
 export default function BottomTabBar({ state, navigation }: BottomTabBarProps) {
+  const renderTab = (route: (typeof state.routes)[0], tabIndex: number) => {
+    const meta     = TAB_META[route.name];
+    const isActive = state.index === tabIndex;
+    const icon     = isActive ? ICONS[meta.iconKey].active : ICONS[meta.iconKey].inactive;
+
+    return (
+      <TouchableOpacity
+        key={route.key}
+        style={styles.tab}
+        onPress={() => navigation.navigate(route.name)}
+        activeOpacity={0.7}
+      >
+        <Text style={styles.icon}>{icon}</Text>
+        <Text style={[styles.label, isActive && styles.labelActive]}>{meta.label}</Text>
+      </TouchableOpacity>
+    );
+  };
+
   return (
     <View style={styles.container}>
-      {state.routes.map((route, idx) => {
-        const meta = TAB_META[route.name];
-        if (!meta) return null;
-        const isActive = state.index === idx;
-        const icon = isActive ? ICONS[meta.iconKey].active : ICONS[meta.iconKey].inactive;
-
-        return (
-          <TouchableOpacity
-            key={route.key}
-            style={styles.tab}
-            onPress={() => navigation.navigate(route.name)}
-            activeOpacity={0.7}
-          >
-            <Text style={styles.icon}>{icon}</Text>
-            <Text style={[styles.label, isActive && styles.labelActive]}>{meta.label}</Text>
-          </TouchableOpacity>
-        );
-      })}
+      {state.routes.map((route, idx) => renderTab(route, idx))}
     </View>
   );
 }
 
-// Static tab bar for screens outside the tab navigator
+// Static tab bar for screens outside the tab navigator (employee branch screens)
 const STATIC_TABS = [
   { name: 'Home',         label: '홈',    icon: '🏠' },
   { name: 'Calendar',     label: '캘린더', icon: '📅' },
   { name: 'Chat',         label: '채팅',   icon: '💬' },
   { name: 'Notification', label: '알림',   icon: '🔔' },
-  { name: 'Todo',         label: '할일',   icon: '✅' },
+  { name: 'Todo',         label: '메모',   icon: '📝' },
 ];
 
 export function BottomTabBarStatic({ activeIndex }: { activeIndex: number }) {
   const navigation = useNavigation();
+
+  const handlePress = (tabName: string) => {
+    (navigation as any).navigate('EmployeeMain', { screen: tabName });
+  };
 
   return (
     <View style={styles.container}>
@@ -65,7 +71,7 @@ export function BottomTabBarStatic({ activeIndex }: { activeIndex: number }) {
           <TouchableOpacity
             key={tab.name}
             style={styles.tab}
-            onPress={() => (navigation as any).navigate('Main', { screen: tab.name })}
+            onPress={() => handlePress(tab.name)}
             activeOpacity={0.7}
           >
             <Text style={styles.icon}>{tab.icon}</Text>

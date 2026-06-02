@@ -6,7 +6,9 @@ import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import BottomTabBar from '../components/BottomTabBar';
 
 // Tab screens
-import HomeScreen from '../screens/HomeScreen';
+import ManagerHomeScreen from '../screens/home/HomeScreen';
+import EmployeeHomeScreen from '../screens/HomeScreen';
+import NotificationScreen from '../screens/NotificationScreen';
 import CalendarScreen from '../screens/CalendarScreen';
 import ChatScreen from '../screens/ChatScreen';
 // Auth screens
@@ -21,6 +23,7 @@ import StoreCodeScreen from '../screens/auth/StoreCodeScreen';
 import StoreConfirmScreen from '../screens/auth/StoreConfirmScreen';
 import StoreRegisterScreen from '../screens/auth/StoreRegisterScreen';
 import SignUpCompleteScreen from '../screens/auth/SignUpCompleteScreen';
+import RegisterCompleteScreen from '../screens/auth/RegisterCompleteScreen';
 
 // Schedule screens
 import TodayScheduleScreen from '../screens/schedule/TodayScheduleScreen';
@@ -30,7 +33,7 @@ import FixedScheduleBottomSheet from '../screens/schedule/FixedScheduleBottomShe
 // ToDo screens
 import ToDoListScreen from '../screens/todo/TodoListScreen';
 import ToDoEditScreen from '../screens/todo/TodoEditScreen';
-import ToDoAddSheet from '../screens/todo/TodoAddBottomSheet';
+import ToDoAddSheet from '../screens/todo/ToDoAddSheet';
 
 // Store screen
 import StoreManagementScreen from '../screens/store/StoreManagementScreen';
@@ -42,9 +45,6 @@ import SubstituteFailScreen from '../screens/substitute/SubstituteFailScreen';
 import AiSubstituteListScreen from '../screens/substitute/AiSubstituteListScreen';
 import AiSubstituteScheduleScreen from '../screens/substitute/AiSubstituteScheduleScreen';
 import AiSubstituteTimeScreen from '../screens/substitute/AiSubstituteTimeScreen';
-
-// Notification screen
-import NotificationScreen from '../screens/NotificationScreen';
 
 // Chat screens
 import PersonalChatScreen from '../screens/chat/PersonalChatScreen';
@@ -71,8 +71,10 @@ export type RootStackParamList = {
   StoreConfirm: undefined;
   StoreRegister: undefined;
   SignUpComplete: undefined;
+  RegisterComplete: undefined;
   // Main tabs
   Main: undefined;
+  EmployeeMain: undefined;
   // Schedule
   TodaySchedule: undefined;
   FixedSchedule: undefined;
@@ -90,11 +92,11 @@ export type RootStackParamList = {
   AiSubstituteList: undefined;
   AiSubstituteSchedule: undefined;
   AiSubstituteTime: undefined;
-  // Notification
-  NotificationScreen: undefined;
   // Chat
   PersonalChat: undefined;
   GroupChat: undefined;
+  // Notification
+  NotificationPage: undefined;
 };
 
 const Tab = createBottomTabNavigator<TabParamList>();
@@ -106,7 +108,22 @@ function MainTabs() {
       tabBar={(props) => <BottomTabBar {...props} />}
       screenOptions={{ headerShown: false }}
     >
-      <Tab.Screen name="Home" component={HomeScreen} />
+      <Tab.Screen name="Home" component={ManagerHomeScreen} />
+      <Tab.Screen name="Calendar" component={CalendarScreen} />
+      <Tab.Screen name="Chat" component={ChatScreen} />
+      <Tab.Screen name="Notification" component={SubstituteRequestScreen} />
+      <Tab.Screen name="Todo" component={ToDoListScreen} />
+    </Tab.Navigator>
+  );
+}
+
+function EmployeeMainTabs() {
+  return (
+    <Tab.Navigator
+      tabBar={(props) => <BottomTabBar {...props} />}
+      screenOptions={{ headerShown: false }}
+    >
+      <Tab.Screen name="Home" component={EmployeeHomeScreen} />
       <Tab.Screen name="Calendar" component={CalendarScreen} />
       <Tab.Screen name="Chat" component={ChatScreen} />
       <Tab.Screen name="Notification" component={NotificationScreen} />
@@ -134,9 +151,11 @@ export default function AppNavigator() {
         <Stack.Screen name="StoreConfirm" component={StoreConfirmScreen} />
         <Stack.Screen name="StoreRegister" component={StoreRegisterScreen} />
         <Stack.Screen name="SignUpComplete" component={SignUpCompleteScreen} />
+        <Stack.Screen name="RegisterComplete" component={RegisterCompleteScreen} />
 
         {/* Main tabs */}
         <Stack.Screen name="Main" component={MainTabs} />
+        <Stack.Screen name="EmployeeMain" component={EmployeeMainTabs} />
 
         {/* Schedule */}
         <Stack.Screen name="TodaySchedule" component={TodayScheduleScreen} />
@@ -167,12 +186,12 @@ export default function AppNavigator() {
           options={{ presentation: 'transparentModal' }}
         />
 
-        {/* Notification */}
-        <Stack.Screen name="NotificationScreen" component={NotificationScreen} />
-
         {/* Chat */}
         <Stack.Screen name="PersonalChat" component={PersonalChatScreen} />
         <Stack.Screen name="GroupChat" component={GroupChatScreen} />
+
+        {/* Notification */}
+        <Stack.Screen name="NotificationPage" component={NotificationScreen} />
       </Stack.Navigator>
     </NavigationContainer>
   );
