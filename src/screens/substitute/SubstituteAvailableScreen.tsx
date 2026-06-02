@@ -17,6 +17,7 @@ import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../../navigation/AppNavigator';
 import { Colors } from '../../constants/colors';
+import { BottomTabBarStatic } from '../../components/BottomTabBar';
 
 type Nav = NativeStackNavigationProp<RootStackParamList>;
 
@@ -388,15 +389,9 @@ export default function SubstituteAvailableScreen() {
         contentContainerStyle={s.scroll}
         keyboardShouldPersistTaps="handled"
       >
-        {/* 요청자 카드 */}
-        <View style={s.requesterCard}>
-          <View style={s.requesterAvatar}>
-            <Text style={s.requesterInitial}>{REQUESTER[0]}</Text>
-          </View>
-          <View style={s.requesterInfo}>
-            <Text style={s.requesterLabel}>요청자</Text>
-            <Text style={s.requesterName}>{REQUESTER}</Text>
-          </View>
+        {/* 요청자 이름 + 스케줄 버튼 */}
+        <View style={s.requesterTop}>
+          <Text style={s.requesterName}>{REQUESTER}</Text>
           <TouchableOpacity
             style={s.scheduleBtn}
             onPress={() => navigation.navigate('AiSubstituteSchedule')}
@@ -476,6 +471,8 @@ export default function SubstituteAvailableScreen() {
         </TouchableOpacity>
       </ScrollView>
 
+      <BottomTabBarStatic activeIndex={3} />
+
       {/* ── 캘린더 모달 ── */}
       <CalendarModal
         visible={calVisible}
@@ -549,27 +546,17 @@ const s = StyleSheet.create({
 
   scroll: { padding: 16, gap: 14, paddingBottom: 40 },
 
-  /* 요청자 카드 */
-  requesterCard: {
-    backgroundColor: '#FFFFFF', borderRadius: 14, padding: 14,
-    flexDirection: 'row', alignItems: 'center', gap: 10,
-    shadowColor: '#000', shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.06, shadowRadius: 6, elevation: 2,
+  /* 요청자 이름 + 스케줄 버튼 */
+  requesterTop: {
+    alignItems: 'center',
+    gap: 10,
   },
-  requesterAvatar: {
-    width: 44, height: 44, borderRadius: 22,
-    backgroundColor: Colors.primary,
-    alignItems: 'center', justifyContent: 'center',
-  },
-  requesterInitial: { fontSize: 18, fontWeight: '700', color: '#FFFFFF' },
-  requesterInfo: { flex: 1, gap: 2 },
-  requesterLabel: { fontSize: 11, color: '#AAAAAA', fontWeight: '500' },
-  requesterName: { fontSize: 15, fontWeight: '700', color: '#1A1A1A' },
+  requesterName: { fontSize: 18, fontWeight: '700', color: '#1A1A1A' },
   scheduleBtn: {
     borderWidth: 1.5, borderColor: Colors.primary,
-    borderRadius: 8, paddingHorizontal: 10, paddingVertical: 6,
+    borderRadius: 8, paddingHorizontal: 16, paddingVertical: 8,
   },
-  scheduleBtnText: { fontSize: 11, fontWeight: '700', color: Colors.primary },
+  scheduleBtnText: { fontSize: 13, fontWeight: '700', color: Colors.primary },
 
   /* 폼 카드 */
   formCard: {

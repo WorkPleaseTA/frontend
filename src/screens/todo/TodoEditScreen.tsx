@@ -11,6 +11,7 @@ import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../../navigation/AppNavigator';
 import { Colors } from '../../constants/colors';
+import { BottomTabBarStatic } from '../../components/BottomTabBar';
 
 type Nav = NativeStackNavigationProp<RootStackParamList>;
 
@@ -42,7 +43,7 @@ export default function ToDoEditScreen() {
         <TouchableOpacity onPress={() => navigation.goBack()} hitSlop={8} style={styles.backBtn}>
           <Text style={styles.backArrow}>←</Text>
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>할 일 목록 편집</Text>
+        <Text style={styles.headerTitle}>TO-DO LIST</Text>
         <View style={styles.placeholder} />
       </View>
 
@@ -80,6 +81,7 @@ export default function ToDoEditScreen() {
           <Text style={styles.addBtnText}>+ 직접 추가하기</Text>
         </TouchableOpacity>
       </View>
+      <BottomTabBarStatic activeIndex={4} />
     </SafeAreaView>
   );
 }

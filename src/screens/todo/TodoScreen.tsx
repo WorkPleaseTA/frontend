@@ -277,7 +277,7 @@ export default function TodoScreen() {
         >
           {/* 오버레이 - 외부 터치 시 닫힘 */}
           <TouchableOpacity
-            style={StyleSheet.absoluteFillObject}
+            style={StyleSheet.absoluteFill}
             activeOpacity={1}
             onPress={closeSheet}
           />

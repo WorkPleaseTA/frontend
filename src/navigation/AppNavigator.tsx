@@ -24,6 +24,8 @@ import StoreConfirmScreen from '../screens/auth/StoreConfirmScreen';
 import StoreRegisterScreen from '../screens/auth/StoreRegisterScreen';
 import SignUpCompleteScreen from '../screens/auth/SignUpCompleteScreen';
 import RegisterCompleteScreen from '../screens/auth/RegisterCompleteScreen';
+import RegisterEmployeeScreen from '../screens/auth/RegisterEmployeeScreen';
+import CodeInputScreen from '../screens/auth/CodeInputScreen';
 
 // Schedule screens
 import TodayScheduleScreen from '../screens/schedule/TodayScheduleScreen';
@@ -72,6 +74,8 @@ export type RootStackParamList = {
   StoreRegister: undefined;
   SignUpComplete: undefined;
   RegisterComplete: undefined;
+  RegisterEmployee: undefined;
+  CodeInput: undefined;
   // Main tabs
   Main: undefined;
   EmployeeMain: undefined;
@@ -126,7 +130,7 @@ function EmployeeMainTabs() {
       <Tab.Screen name="Home" component={EmployeeHomeScreen} />
       <Tab.Screen name="Calendar" component={CalendarScreen} />
       <Tab.Screen name="Chat" component={ChatScreen} />
-      <Tab.Screen name="Notification" component={NotificationScreen} />
+      <Tab.Screen name="Notification" component={SubstituteRequestScreen} />
       <Tab.Screen name="Todo" component={ToDoListScreen} />
     </Tab.Navigator>
   );
@@ -152,6 +156,8 @@ export default function AppNavigator() {
         <Stack.Screen name="StoreRegister" component={StoreRegisterScreen} />
         <Stack.Screen name="SignUpComplete" component={SignUpCompleteScreen} />
         <Stack.Screen name="RegisterComplete" component={RegisterCompleteScreen} />
+        <Stack.Screen name="RegisterEmployee" component={RegisterEmployeeScreen} />
+        <Stack.Screen name="CodeInput" component={CodeInputScreen} />
 
         {/* Main tabs */}
         <Stack.Screen name="Main" component={MainTabs} />

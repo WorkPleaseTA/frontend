@@ -11,6 +11,7 @@ import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../../navigation/AppNavigator';
 import { Colors } from '../../constants/colors';
+import { MaterialIcons } from '@expo/vector-icons';
 
 type Nav = NativeStackNavigationProp<RootStackParamList>;
 
@@ -44,10 +45,8 @@ export default function ToDoListScreen() {
     <SafeAreaView style={styles.safe}>
       {/* Header */}
       <View style={styles.header}>
-        <Text style={styles.headerTitle}>할 일 목록</Text>
-        <TouchableOpacity hitSlop={8} onPress={() => navigation.navigate('ToDoEdit')}>
-          <Text style={styles.editIcon}>✏️</Text>
-        </TouchableOpacity>
+        <Text style={styles.headerTitle}>TO-DO LIST</Text>
+        <View style={styles.backBtn} />
       </View>
 
       {/* Progress summary */}
@@ -61,6 +60,14 @@ export default function ToDoListScreen() {
           />
         </View>
         <Text style={styles.progressText}>{doneCount}/{todos.length} 완료</Text>
+      </View>
+
+      {/* 섹션 타이틀 */}
+      <View style={styles.sectionHeader}>
+        <Text style={styles.sectionTitle}>할 일 목록</Text>
+        <TouchableOpacity onPress={() => navigation.navigate('ToDoEdit')} hitSlop={8}>
+          <MaterialIcons name="edit" size={20} color="#F5A623" />
+        </TouchableOpacity>
       </View>
 
       <FlatList
@@ -107,6 +114,20 @@ const styles = StyleSheet.create({
     color: '#1A1A1A',
   },
   editIcon: { fontSize: 20 },
+
+  sectionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 20,
+    paddingTop: 18,
+    paddingBottom: 10,
+  },
+  sectionTitle: {
+    fontSize: 15,
+    fontWeight: 'bold',
+    color: '#1A1A1A',
+  },
 
   progressBar: {
     flexDirection: 'row',

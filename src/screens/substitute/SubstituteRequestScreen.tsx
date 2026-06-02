@@ -175,6 +175,10 @@ const mc = StyleSheet.create({
   msg:        { flex: 1, fontSize: 12, color: '#AAAAAA' },
 });
 
+<<<<<<< HEAD
+=======
+
+>>>>>>> 272a8d5 (feat: 모바일 레이아웃 최적화 및 에러 수정)
 // ── Main screen ────────────────────────────────────────────────────────────
 
 export default function SubstituteRequestScreen() {

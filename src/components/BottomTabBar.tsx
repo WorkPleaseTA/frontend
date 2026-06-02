@@ -1,10 +1,10 @@
 import React from 'react';
-import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, Platform } from 'react-native';
 import { BottomTabBarProps } from '@react-navigation/bottom-tabs';
 import { useNavigation } from '@react-navigation/native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Colors } from '../constants/colors';
 
-// Unicode / emoji icons — no native font dependency
 const ICONS = {
   home:      { active: '🏠', inactive: '🏠' },
   calendar:  { active: '📅', inactive: '📅' },
@@ -22,6 +22,8 @@ const TAB_META: Record<string, { label: string; iconKey: keyof typeof ICONS }> =
 };
 
 export default function BottomTabBar({ state, navigation }: BottomTabBarProps) {
+  const insets = useSafeAreaInsets();
+
   const renderTab = (route: (typeof state.routes)[0], tabIndex: number) => {
     const meta     = TAB_META[route.name];
     const isActive = state.index === tabIndex;
@@ -41,13 +43,12 @@ export default function BottomTabBar({ state, navigation }: BottomTabBarProps) {
   };
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { paddingBottom: insets.bottom }]}>
       {state.routes.map((route, idx) => renderTab(route, idx))}
     </View>
   );
 }
 
-// Static tab bar for screens outside the tab navigator (employee branch screens)
 const STATIC_TABS = [
   { name: 'Home',         label: '홈',    icon: '🏠' },
   { name: 'Calendar',     label: '캘린더', icon: '📅' },
@@ -86,19 +87,21 @@ export function BottomTabBarStatic({ activeIndex }: { activeIndex: number }) {
 const styles = StyleSheet.create({
   container: {
     flexDirection: 'row',
-    height: 60,
     backgroundColor: '#FFFFFF',
     borderTopWidth: 1,
     borderTopColor: '#EEEEEE',
+    paddingTop: 8,
+    minHeight: 60,
   },
   tab: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 2,
+    paddingBottom: Platform.OS === 'ios' ? 2 : 6,
+    gap: 3,
   },
   icon: {
-    fontSize: 20,
+    fontSize: 22,
   },
   label: {
     fontSize: 10,

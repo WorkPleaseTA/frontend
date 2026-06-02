@@ -13,6 +13,7 @@ import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../../navigation/AppNavigator';
 import { Colors } from '../../constants/colors';
+import { BottomTabBarStatic } from '../../components/BottomTabBar';
 
 type Nav = NativeStackNavigationProp<RootStackParamList>;
 
@@ -108,20 +109,19 @@ const td = StyleSheet.create({
 export default function SubstituteFailScreen() {
   const navigation = useNavigation<Nav>();
 
-  const [message,   setMessage]  = useState('자격증 시험 때문에 대타 요청드립니다ㅜㅜ');
-  const [workers,   setWorkers]  = useState(ALL_WORKERS);
-  const [startTime, setStart]    = useState('8:00 AM');
-  const [endTime,   setEnd]      = useState('12:00 PM');
+  const [message,    setMessage]   = useState('자격증 시험 때문에 대타 요청드립니다ㅜㅜ');
+  const [selected,   setSelected]  = useState<Set<string>>(new Set());
+  const [startTime,  setStart]     = useState('8:00 AM');
+  const [endTime,    setEnd]       = useState('12:00 PM');
 
-  const allFilled = message.trim() && workers.length > 0 && startTime && endTime;
+  const allFilled = message.trim() && selected.size > 0 && startTime && endTime;
 
-  const addWorker = () => {
-    const next = ALL_WORKERS.find((w) => !workers.some((s) => s.id === w.id));
-    if (next) setWorkers((prev) => [...prev, next]);
-  };
-
-  const removeWorker = (id: string) =>
-    setWorkers((prev) => prev.filter((w) => w.id !== id));
+  const toggleWorker = (id: string) =>
+    setSelected(prev => {
+      const next = new Set(prev);
+      next.has(id) ? next.delete(id) : next.add(id);
+      return next;
+    });
 
   const handleSend = () => {
     Alert.alert('전송 완료', '대타 요청이 전송되었습니다.', [
@@ -163,25 +163,24 @@ export default function SubstituteFailScreen() {
         <View style={s.section}>
           <Text style={s.label}>가능한 근무자</Text>
           <View style={s.workersRow}>
-            {workers.map((w) => (
-              <TouchableOpacity
-                key={w.id}
-                style={[s.workerBubble, { backgroundColor: w.color }]}
-                onPress={() => removeWorker(w.id)}
-                activeOpacity={0.8}
-              >
-                <Text style={s.workerInitial}>{w.name[0]}</Text>
-              </TouchableOpacity>
-            ))}
-            {workers.length < ALL_WORKERS.length && (
-              <TouchableOpacity style={s.addBtn} onPress={addWorker} activeOpacity={0.8}>
-                <Text style={s.addBtnText}>+</Text>
-              </TouchableOpacity>
-            )}
+            {ALL_WORKERS.map((w) => {
+              const isSelected = selected.has(w.id);
+              return (
+                <TouchableOpacity
+                  key={w.id}
+                  style={[s.workerBubble, isSelected && s.workerBubbleSelected]}
+                  onPress={() => toggleWorker(w.id)}
+                  activeOpacity={0.8}
+                >
+                  <Text style={[s.workerInitial, isSelected && s.workerInitialSelected]}>
+                    {w.name[0]}
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
           </View>
-          {/* 이름 행 */}
           <View style={s.workerNamesRow}>
-            {workers.map((w) => (
+            {ALL_WORKERS.map((w) => (
               <Text key={w.id} style={s.workerName}>{w.name}</Text>
             ))}
           </View>
@@ -195,13 +194,17 @@ export default function SubstituteFailScreen() {
           </View>
         </View>
 
-        {/* 출근 ~ 퇴근 시간 */}
+        {/* 출근 / 퇴근 시간 */}
         <View style={[s.section, { zIndex: 15 }]}>
-          <Text style={s.label}>출근 시간 ~ 퇴근 시간</Text>
           <View style={s.timeRow}>
-            <TimeDropdown value={startTime} onSelect={setStart} placeholder="8:00 AM" />
-            <Text style={s.tilde}>~</Text>
-            <TimeDropdown value={endTime}   onSelect={setEnd}   placeholder="12:00 PM" />
+            <View style={s.timeCol}>
+              <Text style={s.label}>출근 시간</Text>
+              <TimeDropdown value={startTime} onSelect={setStart} placeholder="8:00 AM" />
+            </View>
+            <View style={s.timeCol}>
+              <Text style={s.label}>퇴근 시간</Text>
+              <TimeDropdown value={endTime} onSelect={setEnd} placeholder="12:00 PM" />
+            </View>
           </View>
         </View>
 
@@ -214,6 +217,7 @@ export default function SubstituteFailScreen() {
           <Text style={[s.sendBtnText, !!allFilled && s.sendBtnTextActive]}>전송</Text>
         </TouchableOpacity>
       </ScrollView>
+      <BottomTabBarStatic activeIndex={3} />
     </SafeAreaView>
   );
 }
@@ -251,15 +255,12 @@ const s = StyleSheet.create({
   workersRow: { flexDirection: 'row', gap: 10, alignItems: 'center' },
   workerBubble: {
     width: 46, height: 46, borderRadius: 23,
+    backgroundColor: '#DDDDDD',
     alignItems: 'center', justifyContent: 'center',
   },
-  workerInitial: { fontSize: 16, fontWeight: '700', color: '#FFFFFF' },
-  addBtn: {
-    width: 46, height: 46, borderRadius: 23,
-    backgroundColor: Colors.primary,
-    alignItems: 'center', justifyContent: 'center',
-  },
-  addBtnText: { fontSize: 26, color: '#FFFFFF', lineHeight: 30 },
+  workerBubbleSelected: { backgroundColor: '#4A90D9' },
+  workerInitial: { fontSize: 16, fontWeight: '700', color: '#888888' },
+  workerInitialSelected: { color: '#FFFFFF' },
   workerNamesRow: { flexDirection: 'row', gap: 10 },
   workerName: { width: 46, textAlign: 'center', fontSize: 10, color: '#888888', fontWeight: '500' },
 
@@ -271,8 +272,8 @@ const s = StyleSheet.create({
   dateText: { fontSize: 14, fontWeight: '600', color: '#1A1A1A' },
 
   /* 시간 */
-  timeRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  tilde: { fontSize: 18, color: '#CCCCCC' },
+  timeRow: { flexDirection: 'row', gap: 12 },
+  timeCol: { flex: 1, gap: 6 },
 
   /* 전송 버튼 */
   sendBtn: {

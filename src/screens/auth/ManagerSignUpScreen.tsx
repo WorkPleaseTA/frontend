@@ -68,7 +68,6 @@ export default function ManagerSignUpScreen() {
             placeholderTextColor="#AAAAAA"
             value={name}
             onChangeText={setName}
-            fontSize={12}
           />
         </View>
 
@@ -82,8 +81,7 @@ export default function ManagerSignUpScreen() {
               value={userId}
               onChangeText={handleUserIdChange}
               autoCapitalize="none"
-              fontSize={12}
-            />
+              />
             <TouchableOpacity style={styles.checkBtn} onPress={handleIdCheck} activeOpacity={0.8}>
               <Text style={styles.checkBtnText}>중복확인</Text>
             </TouchableOpacity>
@@ -106,7 +104,6 @@ export default function ManagerSignUpScreen() {
             value={password}
             onChangeText={setPassword}
             secureTextEntry
-            fontSize={12}
           />
         </View>
 
@@ -119,7 +116,6 @@ export default function ManagerSignUpScreen() {
             value={passwordConfirm}
             onChangeText={setPasswordConfirm}
             secureTextEntry
-            fontSize={12}
           />
         </View>
 

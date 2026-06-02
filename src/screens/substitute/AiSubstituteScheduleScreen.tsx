@@ -11,6 +11,7 @@ import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../../navigation/AppNavigator';
 import { Colors } from '../../constants/colors';
+import { BottomTabBarStatic } from '../../components/BottomTabBar';
 
 type Nav = NativeStackNavigationProp<RootStackParamList>;
 
@@ -373,6 +374,7 @@ export default function AiSubstituteScheduleScreen() {
           </TouchableOpacity>
         </View>
       </ScrollView>
+      <BottomTabBarStatic activeIndex={3} />
     </SafeAreaView>
   );
 }

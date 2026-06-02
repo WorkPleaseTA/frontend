@@ -19,7 +19,7 @@
     "react-native-web": "^0.21.0"
   },
   "devDependencies": {
-    "@types/react": "~18.2.79",
+    "@types/react": "^19.2.16",
     "babel-preset-expo": "~11.0.0",
     "typescript": "~5.3.3"
   },
