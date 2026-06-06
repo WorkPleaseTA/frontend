@@ -1,4 +1,3 @@
-@AGENTS.md
 # WorkManager — 프론트엔드 API 연동 가이드
 
 ## 서비스 개요
