@@ -8,6 +8,7 @@ export interface StoreInfo {
   storeId: number;
   storeMemberId: number;
   role: Role;
+  name: string;
 }
 
 interface AuthContextType {
@@ -25,27 +26,41 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const setStoreInfo = (info: StoreInfo) => setStoreInfoState(info);
 
   const fetchAndSetStoreInfo = async (): Promise<StoreInfo | null> => {
-    const res = await api.get('/stores/me');
-    const stores: any[] = res.data.data;
-    if (!stores || stores.length === 0) return null;
+    try {
+      const res = await api.get('/stores/me');
+      const stores: any[] = res.data.data;
+      if (!stores || stores.length === 0) return null;
 
-    const store = stores[0];
-    // TODO: 실제 응답에서 내 storeMemberId 식별 방식 확인 필요.
-    // 현재는 staffList 첫 번째 항목으로 임시 처리.
-    const myMember = store.staffList?.[0];
-    const info: StoreInfo = {
-      storeId: store.storeId,
-      storeMemberId: myMember?.storeMemberId ?? 0,
-      role: store.role as Role,
-    };
-    setStoreInfoState(info);
-    return info;
+      const store = stores[0];
+      // API 응답의 role 우선, 없으면 AsyncStorage 폴백
+      const apiRole = store.role as Role | undefined;
+      const savedRole = apiRole ?? (await AsyncStorage.getItem('userRole') as Role | null);
+      const role = savedRole ?? 'STAFF';
+      await AsyncStorage.setItem('userRole', role);
+      // API 응답에 inviteCode 있으면 저장 (매장 관리 화면에서 사용)
+      if (store.inviteCode) {
+        await AsyncStorage.setItem('inviteCode', store.inviteCode);
+      }
+
+      const savedName = (await AsyncStorage.getItem('userName')) ?? '';
+      const info: StoreInfo = {
+        storeId: store.id,
+        storeMemberId: store.myStoreMemberId ?? 0,
+        role,
+        name: savedName,
+      };
+      setStoreInfoState(info);
+      return info;
+    } catch {
+      return null;
+    }
   };
 
   const logout = async () => {
     try {
       await api.post('/auth/logout');
     } catch {}
+    // userRole은 제거하지 않음 — 재로그인 시 동일 계정의 role 폴백으로 사용됨
     await AsyncStorage.multiRemove(['accessToken', 'refreshToken']);
     setStoreInfoState(null);
   };

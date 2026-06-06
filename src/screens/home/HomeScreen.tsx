@@ -1,54 +1,107 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
   StyleSheet,
   TouchableOpacity,
-  SafeAreaView,
   ScrollView,
+  ActivityIndicator,
+  RefreshControl,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import type { HomeStackParamList } from '../../navigation/AppNavigator';
+import type { RootStackParamList } from '../../navigation/AppNavigator';
 import { MaterialIcons } from '@expo/vector-icons';
+import { useAuth } from '../../context/AuthContext';
+import api from '../../api/client';
 
-type Nav = NativeStackNavigationProp<HomeStackParamList>;
+type Nav = NativeStackNavigationProp<RootStackParamList>;
 
-// ── Mock data ──────────────────────────────────────────────────────────────
-
-interface ScheduleItem {
-  id: string;
+interface StaffSchedule {
+  storeMemberId: number;
   name: string;
-  time: string;
-  active: boolean;
+  startTime: string;
+  endTime: string;
+  isSubstitute: boolean;
 }
 
-const SCHEDULE_DATA: ScheduleItem[] = [
-  { id: '1', name: '이주하', time: '08:00 - 09:00', active: false },
-  { id: '2', name: '김주영', time: '08:30 - 17:30', active: false },
-  { id: '3', name: '이하은', time: '13:00 - 20:00', active: true },
-  { id: '4', name: '정규람', time: '13:00 - 18:00', active: true },
-  { id: '5', name: '노민혁', time: '18:00 - 23:00', active: false },
-];
+interface SubstituteChange {
+  startTime: string;
+  endTime: string;
+  absenteeName: string;
+  substituteName: string;
+}
 
-const TODO_DATA = [
-  { id: '1', text: '오전 9시 물류 정리' },
-  { id: '2', text: '오후 3시 쿠팡 택배 및 냉장고 정리' },
-];
+interface Todo {
+  todoId: number;
+  content: string;
+  isDone: boolean;
+}
 
-// ── Component ──────────────────────────────────────────────────────────────
+const fmt = (t?: string | null) => t?.substring(0, 5) ?? '--:--';
+
+function toDateParam(d: Date) {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+}
+
+function toDateDisplay(d: Date) {
+  return `${d.getFullYear()}. ${String(d.getMonth() + 1).padStart(2, '0')}. ${String(d.getDate()).padStart(2, '0')}`;
+}
+
+function isNowBetween(start: string, end: string) {
+  const now = new Date();
+  const nowMin = now.getHours() * 60 + now.getMinutes();
+  const [sh, sm] = start.split(':').map(Number);
+  const [eh, em] = end.split(':').map(Number);
+  return nowMin >= sh * 60 + sm && nowMin < eh * 60 + em;
+}
+
+function isToday(d: Date) {
+  const now = new Date();
+  return d.getFullYear() === now.getFullYear() &&
+    d.getMonth() === now.getMonth() &&
+    d.getDate() === now.getDate();
+}
 
 export default function HomeScreen() {
   const navigation = useNavigation<Nav>();
-  const [date, setDate] = useState(new Date(2026, 4, 9));
-  const [checkedIds, setCheckedIds] = useState<string[]>([]);
+  const { storeInfo, logout } = useAuth();
+  const [date, setDate] = useState(() => new Date());
+  const [schedules, setSchedules] = useState<StaffSchedule[]>([]);
+  const [substitutes, setSubstitutes] = useState<SubstituteChange[]>([]);
+  const [todos, setTodos] = useState<Todo[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
 
-  const formatDate = () => {
-    const y = date.getFullYear();
-    const m = String(date.getMonth() + 1).padStart(2, '0');
-    const d = String(date.getDate()).padStart(2, '0');
-    return `${y}. ${m}. ${d}`;
-  };
+  const loadData = useCallback(async (d: Date) => {
+    if (!storeInfo) {
+      setLoading(false);
+      return;
+    }
+    const dateStr = toDateParam(d);
+    try {
+      const [schedRes, subRes, todoRes] = await Promise.allSettled([
+        api.get(`/stores/${storeInfo.storeId}/schedules?date=${dateStr}`),
+        api.get(`/substitute/requests/daily?storeId=${storeInfo.storeId}&date=${dateStr}`),
+        api.get(`/todos?storeId=${storeInfo.storeId}`),
+      ]);
+      if (schedRes.status === 'fulfilled') setSchedules(schedRes.value.data.data ?? []);
+      if (subRes.status === 'fulfilled') setSubstitutes(subRes.value.data.data ?? []);
+      if (todoRes.status === 'fulfilled') setTodos(todoRes.value.data.data ?? []);
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  }, [storeInfo?.storeId]);
+
+  useEffect(() => {
+    setLoading(true);
+    loadData(date);
+  }, [date, loadData]);
 
   const changeDate = (delta: number) => {
     setDate(prev => {
@@ -58,14 +111,24 @@ export default function HomeScreen() {
     });
   };
 
-  const toggleCheck = (id: string) =>
-    setCheckedIds(prev =>
-      prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]
-    );
+  const handleToggle = async (todoId: number) => {
+    try {
+      const res = await api.patch(`/todos/${todoId}/done`);
+      const updated = res.data.data;
+      setTodos(prev => prev.map(t => t.todoId === todoId ? { ...t, isDone: updated.isDone } : t));
+    } catch {}
+  };
+
+  const handleLogout = async () => {
+    await logout();
+    navigation.navigate('Start');
+  };
+
+  const today = isToday(date);
 
   return (
     <SafeAreaView style={s.safe}>
-      {/* ── 상단 헤더 ── */}
+      {/* 상단 헤더 */}
       <View style={s.topHeader}>
         <TouchableOpacity
           style={s.infoBtn}
@@ -75,240 +138,213 @@ export default function HomeScreen() {
           <Text style={s.infoBtnText}>i</Text>
         </TouchableOpacity>
         <Text style={s.topTitle}>Home</Text>
-        <View style={{ width: 32 }} />
+        <TouchableOpacity onPress={handleLogout} activeOpacity={0.7}>
+          <Text style={s.logoutBtn}>로그아웃</Text>
+        </TouchableOpacity>
       </View>
 
-      {/* ── 날짜 네비게이터 ── */}
+      {/* 날짜 네비게이터 */}
       <View style={s.dateRow}>
-        <TouchableOpacity
-          onPress={() => changeDate(-1)}
-          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-        >
+        <TouchableOpacity onPress={() => changeDate(-1)} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
           <Text style={s.arrow}>←</Text>
         </TouchableOpacity>
-        <Text style={s.dateText}>{formatDate()}</Text>
-        <TouchableOpacity
-          onPress={() => changeDate(1)}
-          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-        >
+        <Text style={s.dateText}>{toDateDisplay(date)}</Text>
+        <TouchableOpacity onPress={() => changeDate(1)} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
           <Text style={s.arrow}>→</Text>
         </TouchableOpacity>
       </View>
 
-      <ScrollView
-        showsVerticalScrollIndicator={false}
-        contentContainerStyle={s.scroll}
-      >
-        {/* ── 오늘의 스케줄 ── */}
-        <View style={s.section}>
-          <TouchableOpacity
-            style={s.sectionHeader}
-            onPress={() => navigation.navigate('Calendar')}
-            activeOpacity={0.7}
-          >
-            <Text style={s.sectionTitle}>오늘의 스케줄</Text>
-            <Text style={s.sectionArrow}>›</Text>
-          </TouchableOpacity>
+      {loading ? (
+        <View style={s.center}><ActivityIndicator color="#FF8D28" size="large" /></View>
+      ) : (
+        <ScrollView
+          showsVerticalScrollIndicator={false}
+          contentContainerStyle={s.scroll}
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={() => { setRefreshing(true); loadData(date); }}
+              colors={['#FF8D28']}
+              tintColor="#FF8D28"
+            />
+          }
+        >
+          {/* 오늘의 스케줄 */}
+          <View style={s.section}>
+            <TouchableOpacity
+              style={s.sectionHeader}
+              onPress={() => navigation.getParent()?.navigate('Calendar' as never)}
+              activeOpacity={0.7}
+            >
+              <Text style={s.sectionTitle}>오늘의 스케줄</Text>
+              <Text style={s.sectionArrow}>›</Text>
+            </TouchableOpacity>
 
-          <View style={s.cardList}>
-            {SCHEDULE_DATA.map((item, idx) => (
-              <View
-                key={item.id}
-                style={[s.scheduleCard, item.active && s.scheduleCardActive]}
-              >
-                <Text style={[s.scheduleText, item.active && s.scheduleTextActive]}>
-                  {item.name}
-                </Text>
-                <Text style={[s.scheduleText, item.active && s.scheduleTextActive]}>
-                  {item.time}
-                </Text>
+            {schedules.length === 0 ? (
+              <View style={s.emptyCard}>
+                <Text style={s.emptyText}>등록된 스케줄이 없습니다</Text>
               </View>
-            ))}
+            ) : (
+              <View style={s.cardList}>
+                {schedules.map((item) => {
+                  const active = today && isNowBetween(item.startTime, item.endTime);
+                  return (
+                    <View key={item.storeMemberId} style={[s.scheduleCard, active && s.scheduleCardActive]}>
+                      <Text style={[s.scheduleText, active && s.scheduleTextActive]}>{item.name ?? '-'}</Text>
+                      <Text style={[s.scheduleText, active && s.scheduleTextActive]}>
+                        {fmt(item.startTime)} - {fmt(item.endTime)}
+                      </Text>
+                    </View>
+                  );
+                })}
+              </View>
+            )}
           </View>
-        </View>
 
-        {/* ── 오늘의 스케줄 변동 ── */}
-        <View style={s.section}>
-          <TouchableOpacity style={s.sectionHeader} activeOpacity={0.7}>
-            <Text style={s.sectionTitle}>오늘의 스케줄 변동</Text>
-            <Text style={s.sectionArrow}>›</Text>
-          </TouchableOpacity>
+          {/* 오늘의 스케줄 변동 */}
+          <View style={s.section}>
+            <TouchableOpacity style={s.sectionHeader} activeOpacity={0.7}>
+              <Text style={s.sectionTitle}>오늘의 스케줄 변동</Text>
+              <Text style={s.sectionArrow}>›</Text>
+            </TouchableOpacity>
 
-          <View style={s.substituteCard}>
-            <Text style={s.subTime}>08:00 ~ 09:00</Text>
-
-            <View style={s.subPerson}>
-              <Text style={s.subLabel}>결근자</Text>
-              <Text style={s.subName}>정미희</Text>
-            </View>
-
-            <View style={s.subDivider} />
-
-            <View style={s.subPerson}>
-              <Text style={s.subLabel}>대체자</Text>
-              <Text style={s.subName}>이주하</Text>
-            </View>
+            {substitutes.length === 0 ? (
+              <View style={s.emptyCard}>
+                <Text style={s.emptyText}>스케줄 변동이 없습니다</Text>
+              </View>
+            ) : (
+              <View style={s.cardList}>
+                {substitutes.map((item, idx) => (
+                  <View key={idx} style={s.substituteCard}>
+                    <Text style={s.subTime}>{fmt(item.startTime)} ~ {fmt(item.endTime)}</Text>
+                    <View style={s.subPerson}>
+                      <Text style={s.subLabel}>결근자</Text>
+                      <Text style={s.subName}>{item.absenteeName}</Text>
+                    </View>
+                    <View style={s.subDivider} />
+                    <View style={s.subPerson}>
+                      <Text style={s.subLabel}>대체자</Text>
+                      <Text style={s.subName}>{item.substituteName}</Text>
+                    </View>
+                  </View>
+                ))}
+              </View>
+            )}
           </View>
-        </View>
 
-        {/* ── 오늘의 할 일 ── */}
-        <View style={s.section}>
-          <TouchableOpacity style={s.sectionHeader} activeOpacity={0.7}>
-            <Text style={s.sectionTitle}>오늘의 할 일</Text>
-            <Text style={s.sectionArrow}>›</Text>
-          </TouchableOpacity>
+          {/* 오늘의 할 일 */}
+          <View style={s.section}>
+            <TouchableOpacity style={s.sectionHeader} activeOpacity={0.7}>
+              <Text style={s.sectionTitle}>오늘의 할 일</Text>
+              <Text style={s.sectionArrow}>›</Text>
+            </TouchableOpacity>
 
-          <View style={s.cardList}>
-            {TODO_DATA.map(item => {
-              const done = checkedIds.includes(item.id);
-              return (
-                <View key={item.id} style={s.todoCard}>
-                  <Text style={s.todoText}>{item.text}</Text>
+            {todos.length === 0 ? (
+              <View style={s.emptyCard}>
+                <Text style={s.emptyText}>등록된 할 일이 없습니다</Text>
+              </View>
+            ) : (
+              <View style={s.cardList}>
+                {todos.slice(0, 4).map(item => (
                   <TouchableOpacity
-                    style={[s.checkbox, done && s.checkboxDone]}
-                    onPress={() => toggleCheck(item.id)}
+                    key={item.todoId}
+                    style={s.todoCard}
+                    onPress={() => handleToggle(item.todoId)}
                     activeOpacity={0.7}
-                    hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
                   >
-                    {done && <MaterialIcons name="check" size={14} color="#FFFFFF" />}
+                    <Text style={s.todoText}>{item.content}</Text>
+                    <View style={[s.checkbox, item.isDone && s.checkboxDone]}>
+                      {item.isDone && <MaterialIcons name="check" size={14} color="#FFFFFF" />}
+                    </View>
                   </TouchableOpacity>
-                </View>
-              );
-            })}
+                ))}
+              </View>
+            )}
           </View>
-        </View>
-      </ScrollView>
+        </ScrollView>
+      )}
     </SafeAreaView>
   );
 }
 
-// ── Styles ─────────────────────────────────────────────────────────────────
-
 const s = StyleSheet.create({
   safe: { flex: 1, backgroundColor: '#FFFFFF' },
+  center: { flex: 1, alignItems: 'center', justifyContent: 'center' },
 
-  /* 상단 헤더 */
   topHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 20,
-    paddingTop: 12,
-    paddingBottom: 4,
+    flexDirection: 'row', alignItems: 'center',
+    paddingHorizontal: 20, paddingTop: 12, paddingBottom: 4,
   },
   infoBtn: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    borderWidth: 2,
-    borderColor: '#1A1A1A',
-    alignItems: 'center',
-    justifyContent: 'center',
+    width: 32, height: 32, borderRadius: 16,
+    borderWidth: 2, borderColor: '#1A1A1A',
+    alignItems: 'center', justifyContent: 'center',
   },
   infoBtnText: { fontSize: 13, fontWeight: '800', color: '#1A1A1A' },
+  logoutBtn: { fontSize: 12, fontWeight: '600', color: '#FF8D28' },
   topTitle: {
-    flex: 1,
-    textAlign: 'center',
-    fontSize: 20,
-    fontWeight: '500',
-    color: '#000000',
+    flex: 1, textAlign: 'center',
+    fontSize: 20, fontWeight: '500', color: '#000000',
   },
 
-  /* 날짜 네비게이터 */
   dateRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 12,
-    paddingHorizontal: 20,
-    gap: 20,
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
+    paddingVertical: 12, paddingHorizontal: 20, gap: 20,
   },
   arrow: { fontSize: 18, color: '#61656C' },
   dateText: { fontSize: 25, fontWeight: '600', color: '#000000' },
 
-  /* ScrollView */
-  scroll: {
-    paddingHorizontal: 20,
-    paddingBottom: 32,
-    gap: 20,
-  },
+  scroll: { paddingHorizontal: 20, paddingBottom: 32, gap: 20 },
 
-  /* 섹션 공통 */
   section: { gap: 10 },
   sectionHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
   },
   sectionTitle: { fontSize: 16, fontWeight: '700', color: '#000000' },
   sectionArrow: { fontSize: 18, color: '#AAAAAA' },
   cardList: { gap: 8 },
 
-  /* 스케줄 카드 */
   scheduleCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    borderWidth: 1,
-    borderColor: '#E9F1FF',
-    borderRadius: 16,
-    backgroundColor: '#FFFFFF',
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    paddingHorizontal: 16, paddingVertical: 12,
+    borderWidth: 1, borderColor: '#E9F1FF',
+    borderRadius: 16, backgroundColor: '#FFFFFF',
   },
-  scheduleCardActive: {
-    backgroundColor: '#FF8D28',
-    borderColor: '#FF8D28',
-  },
+  scheduleCardActive: { backgroundColor: '#FF8D28', borderColor: '#FF8D28' },
   scheduleText: { fontSize: 13, color: '#61656C' },
   scheduleTextActive: { color: '#FFFFFF' },
 
-  /* 스케줄 변동 카드 */
   substituteCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 14,
-    borderWidth: 1,
-    borderColor: '#E9F1FF',
-    borderRadius: 16,
-    backgroundColor: '#FFFFFF',
-    gap: 12,
+    flexDirection: 'row', alignItems: 'center',
+    paddingHorizontal: 16, paddingVertical: 14,
+    borderWidth: 1, borderColor: '#E9F1FF',
+    borderRadius: 16, backgroundColor: '#FFFFFF', gap: 12,
   },
   subTime: { fontSize: 12, color: '#757575', flex: 1 },
   subPerson: { alignItems: 'center', gap: 2 },
   subLabel: { fontSize: 10, color: '#FF8D28' },
   subName: { fontSize: 14, fontWeight: '500', color: '#1A1A1A' },
-  subDivider: {
-    width: 1,
-    height: 32,
-    backgroundColor: '#E9F1FF',
-  },
+  subDivider: { width: 1, height: 32, backgroundColor: '#E9F1FF' },
 
-  /* 할 일 카드 */
   todoCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    borderWidth: 1,
-    borderColor: '#E9F1FF',
-    borderRadius: 16,
-    backgroundColor: '#FFFFFF',
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    paddingHorizontal: 16, paddingVertical: 12,
+    borderWidth: 1, borderColor: '#E9F1FF',
+    borderRadius: 16, backgroundColor: '#FFFFFF',
   },
   todoText: { flex: 1, fontSize: 14, color: '#61656C', marginRight: 12 },
   checkbox: {
-    width: 22,
-    height: 22,
-    borderRadius: 4,
-    borderWidth: 2,
-    borderColor: '#E6E6E6',
-    backgroundColor: '#E6E6E6',
+    width: 22, height: 22, borderRadius: 4,
+    borderWidth: 2, borderColor: '#E6E6E6', backgroundColor: '#E6E6E6',
+    alignItems: 'center', justifyContent: 'center',
+  },
+  checkboxDone: { backgroundColor: '#FF8D28', borderColor: '#FF8D28' },
+
+  emptyCard: {
+    paddingVertical: 16, paddingHorizontal: 16,
+    borderWidth: 1, borderColor: '#E9F1FF',
+    borderRadius: 16, backgroundColor: '#FFFFFF',
     alignItems: 'center',
-    justifyContent: 'center',
   },
-  checkboxDone: {
-    backgroundColor: '#FF8D28',
-    borderColor: '#FF8D28',
-  },
+  emptyText: { fontSize: 13, color: '#AAAAAA' },
 });
