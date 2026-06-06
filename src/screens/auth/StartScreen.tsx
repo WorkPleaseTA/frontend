@@ -1,11 +1,6 @@
 import React from 'react';
-import {
-  View,
-  Text,
-  TouchableOpacity,
-  StyleSheet,
-  SafeAreaView,
-} from 'react-native';
+import { View, Text, Image, TouchableOpacity, StyleSheet } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../../navigation/AppNavigator';
@@ -14,21 +9,23 @@ type Nav = NativeStackNavigationProp<RootStackParamList>;
 
 export default function StartScreen() {
   const navigation = useNavigation<Nav>();
+  const insets = useSafeAreaInsets();
 
   return (
-    <SafeAreaView style={styles.container}>
-      {/* 상단 일러스트 */}
+    <View style={[styles.container, { paddingTop: insets.top, paddingBottom: insets.bottom }]}>
       <View style={styles.illustrationArea}>
-        <Text style={styles.emoji}>🏢</Text>
+        <Image
+          source={require('../../../assets/logo.png')}
+          style={styles.logo}
+          resizeMode="contain"
+        />
       </View>
 
-      {/* Welcome 텍스트 */}
       <Text style={styles.welcome}>Welcome</Text>
       <Text style={styles.subtitle}>
         일해조와 함께{'\n'}스마트하게 일해보세요
       </Text>
 
-      {/* 하단 버튼 */}
       <View style={styles.buttonArea}>
         <TouchableOpacity
           style={styles.loginButton}
@@ -44,7 +41,7 @@ export default function StartScreen() {
           <Text style={styles.signUpText}>회원가입</Text>
         </TouchableOpacity>
       </View>
-    </SafeAreaView>
+    </View>
   );
 }
 
@@ -58,8 +55,9 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
-  emoji: {
-    fontSize: 100,
+  logo: {
+    width: 200,
+    height: 200,
   },
   welcome: {
     fontSize: 32,

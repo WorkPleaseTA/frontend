@@ -1,151 +1,212 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
   StyleSheet,
   ScrollView,
   TouchableOpacity,
-  SafeAreaView,
+  ActivityIndicator,
+  RefreshControl,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../navigation/AppNavigator';
 import { Colors } from '../constants/colors';
+import { useAuth } from '../context/AuthContext';
+import api from '../api/client';
 
 type Nav = NativeStackNavigationProp<RootStackParamList>;
 
-// ── Mock data ──────────────────────────────────────────────────────────────
+interface TodaySchedule {
+  storeId: number;
+  storeName: string;
+  startTime: string;
+  endTime: string;
+  isSubstitute: boolean;
+}
 
-const TODOS = [
-  { id: '1', text: '오전 9시 물류 정리',                done: true  },
-  { id: '2', text: '오후 3시 쿠팡 택배 및 냉장고 정리',  done: true  },
-  { id: '3', text: '딸기베이스 채우기',                 done: true  },
-  { id: '4', text: '오후 5시 10명 단체 손님',            done: false },
-];
+interface Todo {
+  todoId: number;
+  content: string;
+  isDone: boolean;
+}
 
-// ── Screen ─────────────────────────────────────────────────────────────────
+const fmt = (t?: string | null) => t?.substring(0, 5) ?? '--:--';
 
 export default function HomeScreen() {
   const navigation = useNavigation<Nav>();
-  const [todos, setTodos] = useState(TODOS);
+  const { storeInfo, logout } = useAuth();
+  const [schedule, setSchedule] = useState<TodaySchedule | null>(null);
+  const [todos, setTodos] = useState<Todo[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
 
-  const toggle = (id: string) =>
-    setTodos((prev) =>
-      prev.map((t) => (t.id === id ? { ...t, done: !t.done } : t))
-    );
+  const loadData = useCallback(async () => {
+    if (!storeInfo) {
+      setLoading(false);
+      return;
+    }
+    try {
+      const [schedRes, todoRes] = await Promise.allSettled([
+        api.get(`/schedule/my/today?storeId=${storeInfo.storeId}`),
+        api.get(`/todos?storeId=${storeInfo.storeId}`),
+      ]);
+      if (schedRes.status === 'fulfilled') {
+        setSchedule(schedRes.value.data.data ?? null);
+      }
+      if (todoRes.status === 'fulfilled') {
+        setTodos(todoRes.value.data.data ?? []);
+      }
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  }, [storeInfo?.storeId]);
+
+  useEffect(() => { loadData(); }, [loadData]);
+
+  const handleToggle = async (todoId: number) => {
+    try {
+      const res = await api.patch(`/todos/${todoId}/done`);
+      const updated = res.data.data;
+      setTodos(prev => prev.map(t => t.todoId === todoId ? { ...t, isDone: updated.isDone } : t));
+    } catch {}
+  };
+
+  const handleLogout = async () => {
+    await logout();
+    navigation.navigate('Start');
+  };
+
+  const displayName = storeInfo?.name;
 
   return (
     <SafeAreaView style={s.safe}>
-
-      {/* ── Header ── */}
       <View style={s.header}>
-        <TouchableOpacity style={s.infoBtn} activeOpacity={0.7}>
-          <Text style={s.infoBtnText}>i</Text>
-        </TouchableOpacity>
-        <Text style={s.headerTitle}>Home</Text>
         <View style={{ width: 32 }} />
+        <Text style={s.headerTitle}>Home</Text>
+        <TouchableOpacity onPress={handleLogout} activeOpacity={0.7}>
+          <Text style={s.logoutBtn}>로그아웃</Text>
+        </TouchableOpacity>
       </View>
 
-      <ScrollView
-        showsVerticalScrollIndicator={false}
-        contentContainerStyle={s.scroll}
-      >
-        {/* ── 인사말 ── */}
-        <View style={s.greetingRow}>
-          <View>
-            <Text style={s.greetingName}>강다은님,</Text>
-            <Text style={s.greetingMsg}>좋은 아침입니다 🙌</Text>
-          </View>
-          <View style={s.dotsCol}>
-            <View style={s.dotLg} />
-            <View style={s.dotSm} />
-          </View>
-        </View>
-
-        {/* ── 내 스케줄 관리 ── */}
-        <View style={s.section}>
-          <TouchableOpacity
-            style={s.sectionHeader}
-            onPress={() => navigation.navigate('TodaySchedule')}
-            activeOpacity={0.7}
-          >
-            <Text style={s.sectionTitle}>내 스케줄 관리</Text>
-            <Text style={s.sectionArrow}>›</Text>
-          </TouchableOpacity>
-
-          <View style={s.scheduleCard}>
-            <View style={s.logoCircle}>
-              <Text style={s.logoText}>☕</Text>
+      {loading ? (
+        <View style={s.center}><ActivityIndicator color={Colors.primary} size="large" /></View>
+      ) : (
+        <ScrollView
+          showsVerticalScrollIndicator={false}
+          contentContainerStyle={s.scroll}
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={() => { setRefreshing(true); loadData(); }}
+              colors={[Colors.primary]}
+              tintColor={Colors.primary}
+            />
+          }
+        >
+          {/* 인사말 */}
+          <View style={s.greetingRow}>
+            <View>
+              <Text style={s.greetingName}>{displayName ? `${displayName}님,` : '안녕하세요,'}</Text>
+              <Text style={s.greetingMsg}>좋은 아침입니다 🙌</Text>
             </View>
-            <View style={s.scheduleTextCol}>
-              <Text style={s.scheduleTime}>8:00 ~ 12:00</Text>
-              <Text style={s.scheduleCafe}>일해조 카페</Text>
+            <View style={s.dotsCol}>
+              <View style={s.dotLg} />
+              <View style={s.dotSm} />
             </View>
           </View>
-        </View>
 
-        {/* ── 오늘의 업무 ── */}
-        <View style={s.section}>
-          <TouchableOpacity
-            style={s.sectionHeader}
-            onPress={() => navigation.navigate('ToDoList')}
-            activeOpacity={0.7}
-          >
-            <Text style={s.sectionTitle}>오늘의 업무</Text>
-            <Text style={s.sectionArrow}>›</Text>
-          </TouchableOpacity>
+          {/* 내 스케줄 관리 */}
+          <View style={s.section}>
+            <TouchableOpacity
+              style={s.sectionHeader}
+              onPress={() => (navigation as any).navigate('Calendar')}
+              activeOpacity={0.7}
+            >
+              <Text style={s.sectionTitle}>내 스케줄 관리</Text>
+              <Text style={s.sectionArrow}>›</Text>
+            </TouchableOpacity>
 
-          <View style={s.todoCard}>
-            {todos.map((item, idx) => (
-              <React.Fragment key={item.id}>
-                {idx > 0 && <View style={s.divider} />}
-                <TouchableOpacity
-                  style={s.todoRow}
-                  onPress={() => toggle(item.id)}
-                  activeOpacity={0.7}
-                >
-                  <View style={[s.checkbox, item.done && s.checkboxDone]}>
-                    {item.done && <Text style={s.checkmark}>✓</Text>}
-                  </View>
-                  <Text style={s.todoText}>{item.text}</Text>
-                </TouchableOpacity>
-              </React.Fragment>
-            ))}
+            {schedule?.startTime ? (
+              <View style={s.scheduleCard}>
+                <View style={s.logoCircle}>
+                  <Text style={s.logoText}>☕</Text>
+                </View>
+                <View style={s.scheduleTextCol}>
+                  <Text style={s.scheduleTime}>
+                    {fmt(schedule.startTime)} ~ {fmt(schedule.endTime)}
+                  </Text>
+                  <Text style={s.scheduleCafe}>{schedule.storeName}</Text>
+                </View>
+              </View>
+            ) : (
+              <View style={s.emptyCard}>
+                <Text style={s.emptyText}>오늘 스케줄이 없습니다</Text>
+              </View>
+            )}
           </View>
-        </View>
-      </ScrollView>
+
+          {/* 오늘의 업무 */}
+          <View style={s.section}>
+            <TouchableOpacity
+              style={s.sectionHeader}
+              onPress={() => navigation.navigate('ToDoList')}
+              activeOpacity={0.7}
+            >
+              <Text style={s.sectionTitle}>오늘의 업무</Text>
+              <Text style={s.sectionArrow}>›</Text>
+            </TouchableOpacity>
+
+            {todos.length === 0 ? (
+              <View style={s.emptyCard}>
+                <Text style={s.emptyText}>등록된 할 일이 없습니다</Text>
+              </View>
+            ) : (
+              <View style={s.todoCard}>
+                {todos.slice(0, 4).map((item, idx) => (
+                  <React.Fragment key={item.todoId}>
+                    {idx > 0 && <View style={s.divider} />}
+                    <TouchableOpacity
+                      style={s.todoRow}
+                      onPress={() => handleToggle(item.todoId)}
+                      activeOpacity={0.7}
+                    >
+                      <View style={[s.checkbox, item.isDone && s.checkboxDone]}>
+                        {item.isDone && <Text style={s.checkmark}>✓</Text>}
+                      </View>
+                      <Text style={s.todoText}>{item.content}</Text>
+                    </TouchableOpacity>
+                  </React.Fragment>
+                ))}
+              </View>
+            )}
+          </View>
+        </ScrollView>
+      )}
     </SafeAreaView>
   );
 }
-
-// ── Styles ─────────────────────────────────────────────────────────────────
 
 const BLUE = '#4A90D9';
 
 const s = StyleSheet.create({
   safe: { flex: 1, backgroundColor: '#FAFAFA' },
+  center: { flex: 1, alignItems: 'center', justifyContent: 'center' },
 
-  /* Header */
   header: {
     flexDirection: 'row', alignItems: 'center',
     paddingHorizontal: 16, paddingVertical: 14,
     backgroundColor: '#FFFFFF',
   },
-  infoBtn: {
-    width: 32, height: 32, borderRadius: 16,
-    borderWidth: 2, borderColor: '#1A1A1A',
-    alignItems: 'center', justifyContent: 'center',
-  },
-  infoBtnText: { fontSize: 13, fontWeight: '800', color: '#1A1A1A' },
   headerTitle: {
     flex: 1, textAlign: 'center',
     fontSize: 20, fontWeight: '500', color: '#000000',
   },
 
-  /* ScrollView */
   scroll: { padding: 20, gap: 28, paddingBottom: 40 },
 
-  /* 인사말 */
   greetingRow: {
     flexDirection: 'row',
     alignItems: 'flex-start',
@@ -153,17 +214,15 @@ const s = StyleSheet.create({
   },
   greetingName: { fontSize: 28, fontWeight: '800', color: '#1A1A1A', lineHeight: 36 },
   greetingMsg:  { fontSize: 28, fontWeight: '800', color: '#1A1A1A', lineHeight: 36 },
-  dotsCol:  { gap: 6, marginTop: 6, alignItems: 'flex-end' },
-  dotLg:    { width: 14, height: 14, borderRadius: 7,  backgroundColor: BLUE },
-  dotSm:    { width: 9,  height: 9,  borderRadius: 4.5, backgroundColor: BLUE, opacity: 0.45 },
+  dotsCol: { gap: 6, marginTop: 6, alignItems: 'flex-end' },
+  dotLg:   { width: 14, height: 14, borderRadius: 7, backgroundColor: BLUE },
+  dotSm:   { width: 9, height: 9, borderRadius: 4.5, backgroundColor: BLUE, opacity: 0.45 },
 
-  /* 섹션 공통 */
   section:       { gap: 12 },
   sectionHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   sectionTitle:  { fontSize: 16, fontWeight: '700', color: '#1A1A1A' },
   sectionArrow:  { fontSize: 22, color: '#BBBBBB', lineHeight: 24 },
 
-  /* 스케줄 카드 */
   scheduleCard: {
     backgroundColor: Colors.primary,
     borderRadius: 16, padding: 18,
@@ -177,12 +236,20 @@ const s = StyleSheet.create({
     backgroundColor: 'rgba(255,255,255,0.25)',
     alignItems: 'center', justifyContent: 'center',
   },
-  logoText:      { fontSize: 24 },
+  logoText:       { fontSize: 24 },
   scheduleTextCol: { flex: 1 },
-  scheduleTime:  { fontSize: 22, fontWeight: '800', color: '#FFFFFF', letterSpacing: -0.5 },
-  scheduleCafe:  { fontSize: 13, color: 'rgba(255,255,255,0.8)', marginTop: 4, fontWeight: '500' },
+  scheduleTime:   { fontSize: 22, fontWeight: '800', color: '#FFFFFF', letterSpacing: -0.5 },
+  scheduleCafe:   { fontSize: 13, color: 'rgba(255,255,255,0.8)', marginTop: 4, fontWeight: '500' },
 
-  /* 업무 카드 */
+  emptyCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 14, padding: 20,
+    alignItems: 'center',
+    shadowColor: '#000', shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.06, shadowRadius: 8, elevation: 2,
+  },
+  emptyText: { fontSize: 14, color: '#AAAAAA' },
+
   todoCard: {
     backgroundColor: '#FFFFFF',
     borderRadius: 14, overflow: 'hidden',
@@ -202,4 +269,5 @@ const s = StyleSheet.create({
   checkboxDone: { backgroundColor: Colors.primary, borderColor: Colors.primary },
   checkmark:    { fontSize: 12, color: '#FFFFFF', fontWeight: '800' },
   todoText:     { flex: 1, fontSize: 14, color: '#1A1A1A', lineHeight: 20 },
+  logoutBtn:    { fontSize: 12, fontWeight: '600', color: '#FF8D28' },
 });

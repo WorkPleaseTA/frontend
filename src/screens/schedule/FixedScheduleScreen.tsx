@@ -1,25 +1,43 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 import {
-  View,
-  Text,
-  StyleSheet,
-  TouchableOpacity,
-  SafeAreaView,
-  ScrollView,
-  Modal,
-  FlatList,
+  View, Text, StyleSheet, TouchableOpacity,
+  ScrollView, Modal, FlatList, ActivityIndicator, Alert,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import { MaterialIcons } from '@expo/vector-icons';
+import { useAuth } from '../../context/AuthContext';
+import api from '../../api/client';
 
-// ── 시간 옵션 (00:00 ~ 23:30, 30분 단위) ──────────────────────────────────
+// ── 상수 ──────────────────────────────────────────────────────────────────────
+
+const DAY_TABS = ['월', '화', '수', '목', '금', '토', '일'];
+const DAY_API: Record<string, string> = {
+  '월': 'MONDAY', '화': 'TUESDAY', '수': 'WEDNESDAY',
+  '목': 'THURSDAY', '금': 'FRIDAY', '토': 'SATURDAY', '일': 'SUNDAY',
+};
+
 const TIME_OPTIONS = Array.from({ length: 48 }, (_, i) => {
   const h = Math.floor(i / 2);
   const m = i % 2 === 0 ? '00' : '30';
   return `${String(h).padStart(2, '0')}:${m}`;
 });
 
-// ── TimePicker 컴포넌트 ───────────────────────────────────────────────────
+const DEFAULT_TIME = { start: '09:00', end: '18:00' };
+
+// ── 타입 ──────────────────────────────────────────────────────────────────────
+
+interface EditViewItem {
+  storeMemberId: number;
+  staffName: string;
+  hasSchedule: boolean;
+  scheduleId?: number;
+  startTime?: string; // HH:mm:ss
+  endTime?: string;
+}
+
+// ── TimePicker ────────────────────────────────────────────────────────────────
+
 function TimePicker({ value, onChange }: { value: string; onChange: (t: string) => void }) {
   const [visible, setVisible] = useState(false);
   const listRef = useRef<FlatList>(null);
@@ -40,7 +58,6 @@ function TimePicker({ value, onChange }: { value: string; onChange: (t: string) 
         <Text style={s.timeText}>{value}</Text>
         <Text style={s.timeArrow}>▼</Text>
       </TouchableOpacity>
-
       <Modal visible={visible} transparent animationType="fade">
         <TouchableOpacity style={s.pickerOverlay} activeOpacity={1} onPress={() => setVisible(false)}>
           <View style={s.pickerBox}>
@@ -70,80 +87,109 @@ function TimePicker({ value, onChange }: { value: string; onChange: (t: string) 
   );
 }
 
-// ── 상수 ──────────────────────────────────────────────────────────────────
-const DAY_TABS = ['월', '화', '수', '목', '금', '토', '일'];
+// ── 메인 화면 ─────────────────────────────────────────────────────────────────
 
-const ALL_EMPLOYEES = [
-  { id: '1', name: '이주하' },
-  { id: '2', name: '김주영' },
-  { id: '3', name: '이하은' },
-  { id: '4', name: '정규람' },
-  { id: '5', name: '노민혁' },
-];
-
-type ScheduleEntry = { name: string; startTime: string; endTime: string };
-
-const DEFAULT_TIMES = Object.fromEntries(
-  ALL_EMPLOYEES.map(e => [e.id, { start: '09:00', end: '18:00' }])
-);
-
-// ── Screen ────────────────────────────────────────────────────────────────
 export default function FixedScheduleScreen() {
   const navigation = useNavigation();
+  const { storeInfo } = useAuth();
 
   const [activeDay, setActiveDay] = useState('월');
   const [mode, setMode] = useState<'view' | 'input'>('view');
-  const [scheduleData, setScheduleData] = useState<Record<string, ScheduleEntry[]>>({});
-  const [checkedIds, setCheckedIds] = useState<string[]>([]);
-  const [times, setTimes] = useState<Record<string, { start: string; end: string }>>(DEFAULT_TIMES);
+  const [items, setItems] = useState<EditViewItem[]>([]); // edit-view 응답
+  const [originalItems, setOriginalItems] = useState<EditViewItem[]>([]); // 저장 전 원본 (삭제 판단용)
+  const [checkedIds, setCheckedIds] = useState<number[]>([]);
+  const [times, setTimes] = useState<Record<number, { start: string; end: string }>>({});
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
 
-  const dayData = scheduleData[activeDay] ?? [];
-  const hasData = dayData.length > 0;
+  const loadEditView = useCallback(async (day: string) => {
+    if (!storeInfo) return;
+    setLoading(true);
+    try {
+      const res = await api.get(
+        `/stores/${storeInfo.storeId}/fixed-schedules/edit-view?dayOfWeek=${DAY_API[day]}`
+      );
+      const data: EditViewItem[] = res.data.data ?? [];
+      setItems(data);
+      setOriginalItems(data);
+    } catch {
+      setItems([]);
+      setOriginalItems([]);
+    } finally {
+      setLoading(false);
+    }
+  }, [storeInfo?.storeId]);
 
-  // 요일 전환 시 조회 모드로 복귀
+  useEffect(() => { loadEditView(activeDay); }, [activeDay, loadEditView]);
+
   const selectDay = (day: string) => {
     setActiveDay(day);
     setMode('view');
   };
 
-  const toggleCheck = (id: string) =>
+  const toggleCheck = (id: number) =>
     setCheckedIds(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
 
-  const setTime = (empId: string, field: 'start' | 'end', val: string) =>
-    setTimes(prev => ({ ...prev, [empId]: { ...prev[empId], [field]: val } }));
+  const setTime = (memberId: number, field: 'start' | 'end', val: string) =>
+    setTimes(prev => ({ ...prev, [memberId]: { ...(prev[memberId] ?? DEFAULT_TIME), [field]: val } }));
 
-  // 추가하기: 빈 상태로 입력 모드 진입
-  const handleAddStart = () => {
-    setCheckedIds([]);
-    setTimes({ ...DEFAULT_TIMES });
-    setMode('input');
-  };
-
-  // 수정하기: 기존 데이터를 세팅한 상태로 입력 모드 진입
-  const handleEditStart = () => {
-    const newChecked: string[] = [];
-    const newTimes = { ...DEFAULT_TIMES };
-    dayData.forEach(entry => {
-      const emp = ALL_EMPLOYEES.find(e => e.name === entry.name);
-      if (emp) {
-        newChecked.push(emp.id);
-        newTimes[emp.id] = { start: entry.startTime, end: entry.endTime };
+  // 조회 모드 → 입력 모드 진입
+  const enterInputMode = () => {
+    const initChecked: number[] = [];
+    const initTimes: Record<number, { start: string; end: string }> = {};
+    items.forEach(item => {
+      if (item.hasSchedule) {
+        initChecked.push(item.storeMemberId);
+        initTimes[item.storeMemberId] = {
+          start: item.startTime?.substring(0, 5) ?? DEFAULT_TIME.start,
+          end: item.endTime?.substring(0, 5) ?? DEFAULT_TIME.end,
+        };
+      } else {
+        initTimes[item.storeMemberId] = { ...DEFAULT_TIME };
       }
     });
-    setCheckedIds(newChecked);
-    setTimes(newTimes);
+    setCheckedIds(initChecked);
+    setTimes(initTimes);
     setMode('input');
   };
 
-  // 입력 완료: 저장 후 조회 모드로 전환
-  const handleSave = () => {
-    const entries: ScheduleEntry[] = checkedIds.map(id => {
-      const emp = ALL_EMPLOYEES.find(e => e.id === id)!;
-      return { name: emp.name, startTime: times[id].start, endTime: times[id].end };
-    });
-    setScheduleData(prev => ({ ...prev, [activeDay]: entries }));
-    setMode('view');
+  // 저장
+  const handleSave = async () => {
+    if (!storeInfo) return;
+    setSaving(true);
+    try {
+      // 1. 기존에 스케줄 있었지만 지금 체크 해제된 직원 → DELETE
+      const toDelete = originalItems.filter(
+        item => item.hasSchedule && item.scheduleId != null && !checkedIds.includes(item.storeMemberId)
+      );
+      if (toDelete.length > 0) {
+        await Promise.all(
+          toDelete.map(item =>
+            api.delete(`/stores/${storeInfo.storeId}/fixed-schedules/${item.scheduleId}`)
+          )
+        );
+      }
+
+      // 2. 체크된 직원 → PUT (upsert)
+      if (checkedIds.length > 0) {
+        const schedules = checkedIds.map(id => ({
+          storeMemberId: id,
+          startTime: (times[id]?.start ?? DEFAULT_TIME.start) + ':00',
+          endTime: (times[id]?.end ?? DEFAULT_TIME.end) + ':00',
+        }));
+        await api.put(`/stores/${storeInfo.storeId}/fixed-schedules`, { dayOfWeek: DAY_API[activeDay], schedules });
+      }
+
+      await loadEditView(activeDay);
+      setMode('view');
+    } catch (e: any) {
+      Alert.alert('저장 실패', e.response?.data?.message ?? '저장 중 오류가 발생했습니다.');
+    } finally {
+      setSaving(false);
+    }
   };
+
+  const hasSchedule = items.some(item => item.hasSchedule);
 
   return (
     <SafeAreaView style={s.safe}>
@@ -165,51 +211,51 @@ export default function FixedScheduleScreen() {
         <View style={s.daySection}>
           <Text style={s.dayLabel}>요일 선택</Text>
           <View style={s.dayRow}>
-            {DAY_TABS.map(day => {
-              const active = day === activeDay;
-              return (
-                <TouchableOpacity
-                  key={day}
-                  style={[s.dayTag, active && s.dayTagActive]}
-                  onPress={() => selectDay(day)}
-                  activeOpacity={0.7}
-                >
-                  <Text style={[s.dayTagText, active && s.dayTagTextActive]}>{day}</Text>
-                </TouchableOpacity>
-              );
-            })}
+            {DAY_TABS.map(day => (
+              <TouchableOpacity
+                key={day}
+                style={[s.dayTag, activeDay === day && s.dayTagActive]}
+                onPress={() => selectDay(day)}
+                activeOpacity={0.7}
+              >
+                <Text style={[s.dayTagText, activeDay === day && s.dayTagTextActive]}>{day}</Text>
+              </TouchableOpacity>
+            ))}
           </View>
         </View>
 
-        {/* ── 상태 1: 빈 화면 ── */}
-        {mode === 'view' && !hasData && (
+        {/* 로딩 */}
+        {loading && <ActivityIndicator color="#FF8D28" style={{ marginTop: 32 }} />}
+
+        {/* 상태 1: 조회 모드 — 스케줄 없음 */}
+        {!loading && mode === 'view' && !hasSchedule && (
           <View style={s.emptyArea} />
         )}
 
-        {/* ── 상태 2: 입력 모드 ── */}
-        {mode === 'input' && (
+        {/* 상태 2: 입력 모드 */}
+        {!loading && mode === 'input' && (
           <View style={s.list}>
-            {ALL_EMPLOYEES.map(emp => {
-              const checked = checkedIds.includes(emp.id);
+            {items.map(emp => {
+              const checked = checkedIds.includes(emp.storeMemberId);
+              const t = times[emp.storeMemberId] ?? DEFAULT_TIME;
               return (
-                <View key={emp.id}>
+                <View key={emp.storeMemberId}>
                   <View style={s.employeeRow}>
-                    <Text style={s.employeeName}>{emp.name}</Text>
+                    <Text style={s.employeeName}>{emp.staffName}</Text>
                     <TouchableOpacity
                       style={[s.checkbox, checked && s.checkboxChecked]}
-                      onPress={() => toggleCheck(emp.id)}
+                      onPress={() => toggleCheck(emp.storeMemberId)}
                       activeOpacity={0.7}
                       hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
                     >
                       {checked && <MaterialIcons name="check" size={14} color="#FFFFFF" />}
                     </TouchableOpacity>
                   </View>
-
                   {checked && (
                     <View style={s.timeRow}>
-                      <TimePicker value={times[emp.id].start} onChange={v => setTime(emp.id, 'start', v)} />
+                      <TimePicker value={t.start} onChange={v => setTime(emp.storeMemberId, 'start', v)} />
                       <Text style={s.timeSep}>~</Text>
-                      <TimePicker value={times[emp.id].end} onChange={v => setTime(emp.id, 'end', v)} />
+                      <TimePicker value={t.end} onChange={v => setTime(emp.storeMemberId, 'end', v)} />
                     </View>
                   )}
                 </View>
@@ -218,13 +264,15 @@ export default function FixedScheduleScreen() {
           </View>
         )}
 
-        {/* ── 상태 3: 조회 모드 (데이터 있음) ── */}
-        {mode === 'view' && hasData && (
+        {/* 상태 3: 조회 모드 — 스케줄 있음 */}
+        {!loading && mode === 'view' && hasSchedule && (
           <View style={s.list}>
-            {dayData.map((entry, idx) => (
-              <View key={idx} style={s.viewCard}>
-                <Text style={s.viewName}>{entry.name}</Text>
-                <Text style={s.viewTime}>{entry.startTime} - {entry.endTime}</Text>
+            {items.filter(item => item.hasSchedule).map(item => (
+              <View key={item.storeMemberId} style={s.viewCard}>
+                <Text style={s.viewName}>{item.staffName}</Text>
+                <Text style={s.viewTime}>
+                  {item.startTime?.substring(0, 5)} - {item.endTime?.substring(0, 5)}
+                </Text>
               </View>
             ))}
           </View>
@@ -232,39 +280,37 @@ export default function FixedScheduleScreen() {
       </ScrollView>
 
       {/* 하단 버튼 */}
-      <View style={s.footer}>
-        {/* 상태 1: 추가하기 */}
-        {mode === 'view' && !hasData && (
-          <TouchableOpacity style={s.actionBtn} onPress={handleAddStart} activeOpacity={0.85}>
-            <Text style={s.actionBtnText}>추가하기</Text>
-            <MaterialIcons name="edit" size={18} color="#FFFFFF" style={s.btnIcon} />
-          </TouchableOpacity>
-        )}
-
-        {/* 상태 2: 입력 완료 */}
-        {mode === 'input' && (
-          <TouchableOpacity style={s.actionBtn} onPress={handleSave} activeOpacity={0.85}>
-            <Text style={s.actionBtnText}>입력 완료</Text>
-          </TouchableOpacity>
-        )}
-
-        {/* 상태 3: 수정하기 */}
-        {mode === 'view' && hasData && (
-          <TouchableOpacity style={s.actionBtn} onPress={handleEditStart} activeOpacity={0.85}>
-            <Text style={s.actionBtnText}>수정하기</Text>
-            <MaterialIcons name="edit" size={18} color="#FFFFFF" style={s.btnIcon} />
-          </TouchableOpacity>
-        )}
-      </View>
+      {!loading && (
+        <View style={s.footer}>
+          {mode === 'view' && !hasSchedule && (
+            <TouchableOpacity style={s.actionBtn} onPress={enterInputMode} activeOpacity={0.85}>
+              <Text style={s.actionBtnText}>추가하기</Text>
+              <MaterialIcons name="edit" size={18} color="#FFFFFF" style={s.btnIcon} />
+            </TouchableOpacity>
+          )}
+          {mode === 'input' && (
+            <TouchableOpacity style={s.actionBtn} onPress={handleSave} activeOpacity={0.85} disabled={saving}>
+              {saving
+                ? <ActivityIndicator color="#FFFFFF" />
+                : <Text style={s.actionBtnText}>입력 완료</Text>
+              }
+            </TouchableOpacity>
+          )}
+          {mode === 'view' && hasSchedule && (
+            <TouchableOpacity style={s.actionBtn} onPress={enterInputMode} activeOpacity={0.85}>
+              <Text style={s.actionBtnText}>수정하기</Text>
+              <MaterialIcons name="edit" size={18} color="#FFFFFF" style={s.btnIcon} />
+            </TouchableOpacity>
+          )}
+        </View>
+      )}
     </SafeAreaView>
   );
 }
 
-// ── Styles ────────────────────────────────────────────────────────────────
+// ── Styles ────────────────────────────────────────────────────────────────────
 const s = StyleSheet.create({
   safe: { flex: 1, backgroundColor: '#FFFFFF' },
-
-  /* 헤더 */
   header: {
     flexDirection: 'row', alignItems: 'center',
     paddingHorizontal: 20, paddingVertical: 14,
@@ -273,11 +319,8 @@ const s = StyleSheet.create({
   backBtn: { width: 36 },
   backArrow: { fontSize: 22, color: '#1A1A1A' },
   headerTitle: { flex: 1, textAlign: 'center', fontSize: 18, fontWeight: '600', color: '#000000' },
-
-  /* ScrollView */
   scroll: { paddingHorizontal: 20, paddingTop: 20, paddingBottom: 24, gap: 20 },
 
-  /* 요일 선택 */
   daySection: { gap: 10 },
   dayLabel: { fontSize: 14, fontWeight: '600', color: '#1A1A1A' },
   dayRow: { flexDirection: 'row', gap: 8 },
@@ -289,13 +332,9 @@ const s = StyleSheet.create({
   dayTagText: { fontSize: 13, color: '#757575' },
   dayTagTextActive: { color: '#FFFFFF', fontWeight: '700' },
 
-  /* 빈 영역 (상태 1) */
   emptyArea: { height: 120 },
-
-  /* 직원 리스트 공통 */
   list: { gap: 10 },
 
-  /* 입력 모드 - 직원 행 */
   employeeRow: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
     borderWidth: 1, borderColor: '#E9F1FF', borderRadius: 16,
@@ -308,7 +347,6 @@ const s = StyleSheet.create({
   },
   checkboxChecked: { backgroundColor: '#FF8D28' },
 
-  /* 시간 입력 행 */
   timeRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 8 },
   timeBox: {
     flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
@@ -319,7 +357,6 @@ const s = StyleSheet.create({
   timeArrow: { fontSize: 10, color: '#9C9C9C' },
   timeSep: { fontSize: 20, color: '#000000' },
 
-  /* 조회 모드 - 직원 카드 (상태 3) */
   viewCard: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
     borderWidth: 1, borderColor: '#E9F1FF', borderRadius: 16,
@@ -328,11 +365,9 @@ const s = StyleSheet.create({
   viewName: { fontSize: 13, color: '#848A94' },
   viewTime: { fontSize: 14, color: '#848A94' },
 
-  /* 시간 피커 */
   pickerOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.35)', justifyContent: 'center', alignItems: 'center' },
   pickerBox: {
-    width: 160, maxHeight: 300,
-    backgroundColor: '#FFFFFF', borderRadius: 16, overflow: 'hidden',
+    width: 160, maxHeight: 300, backgroundColor: '#FFFFFF', borderRadius: 16, overflow: 'hidden',
     shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.15, shadowRadius: 12, elevation: 8,
   },
   pickerItem: { height: 44, alignItems: 'center', justifyContent: 'center' },
@@ -340,7 +375,6 @@ const s = StyleSheet.create({
   pickerItemText: { fontSize: 16, color: '#1A1A1A' },
   pickerItemTextSel: { color: '#FF8D28', fontWeight: '700' },
 
-  /* 하단 버튼 */
   footer: {
     paddingHorizontal: 20, paddingVertical: 16,
     borderTopWidth: 1, borderTopColor: '#F0F0F0', backgroundColor: '#FFFFFF',

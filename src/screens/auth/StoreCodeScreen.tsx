@@ -1,42 +1,38 @@
 import React, { useState } from 'react';
 import {
-  View,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  StyleSheet,
-  KeyboardAvoidingView,
-  Platform,
-  Modal,
+  View, Text, TextInput, StyleSheet,
+  KeyboardAvoidingView, Platform, Alert, ActivityIndicator,
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import Header from '../../components/Header';
 import OrangeButton from '../../components/OrangeButton';
 import { RootStackParamList } from '../../navigation/AppNavigator';
+import api from '../../api/client';
+import { useAuth } from '../../context/AuthContext';
 
 type Nav = NativeStackNavigationProp<RootStackParamList>;
 
 export default function StoreCodeScreen() {
   const navigation = useNavigation<Nav>();
+  const { fetchAndSetStoreInfo } = useAuth();
   const [code, setCode] = useState('');
-  const [modalVisible, setModalVisible] = useState(false);
-  const [modalCode, setModalCode] = useState('');
+  const [loading, setLoading] = useState(false);
 
   const isActive = code.trim().length > 0;
 
-  const openModal = () => {
-    setModalCode(code);
-    setModalVisible(true);
-  };
-
-  const closeModal = () => {
-    setModalVisible(false);
-  };
-
-  const handleConfirm = () => {
-    setModalVisible(false);
-    navigation.navigate('StoreConfirm');
+  const handleJoin = async () => {
+    if (!isActive) return;
+    setLoading(true);
+    try {
+      await api.post('/stores/join', { inviteCode: code.trim() });
+      await fetchAndSetStoreInfo(); // 실패해도 조인 자체는 성공이므로 무시
+      navigation.replace('EmployeeMain');
+    } catch (e: any) {
+      Alert.alert('오류', e.response?.data?.message ?? '매장 합류에 실패했습니다. 코드를 확인해주세요.');
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -56,169 +52,38 @@ export default function StoreCodeScreen() {
           value={code}
           onChangeText={setCode}
           autoCapitalize="none"
+          autoCorrect={false}
         />
 
-        <OrangeButton
-          title="입력"
-          onPress={openModal}
-          disabled={!isActive}
-          style={[styles.btnOverride, isActive ? styles.btnActive : styles.btnInactive]}
-          textStyle={styles.btnText}
-        />
-      </View>
-
-      {/* 바텀시트 모달 */}
-      <Modal
-        visible={modalVisible}
-        transparent
-        animationType="slide"
-        onRequestClose={closeModal}
-      >
-        <KeyboardAvoidingView
-          style={styles.modalOverlay}
-          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        >
-          <TouchableOpacity style={styles.backdrop} activeOpacity={1} onPress={closeModal} />
-
-          <View style={styles.sheet}>
-            <Text style={styles.sheetTitle}>우리 매장 찾기</Text>
-            <Text style={styles.sheetLabel}>매장 코드를 입력해주세요</Text>
-
-            <TextInput
-              style={styles.sheetInput}
-              value={modalCode}
-              onChangeText={setModalCode}
-              autoCapitalize="none"
-              autoFocus
+        {loading
+          ? <ActivityIndicator color="#FF8D28" />
+          : (
+            <OrangeButton
+              title="확인"
+              onPress={handleJoin}
+              disabled={!isActive}
+              style={[styles.btnOverride, isActive ? styles.btnActive : styles.btnInactive]}
+              textStyle={styles.btnText}
             />
-
-            <View style={styles.sheetButtons}>
-              <TouchableOpacity style={styles.prevBtn} onPress={closeModal} activeOpacity={0.7}>
-                <Text style={styles.prevBtnText}>이전</Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                style={styles.confirmBtn}
-                onPress={handleConfirm}
-                activeOpacity={0.8}
-              >
-                <Text style={styles.confirmBtnText}>확인</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        </KeyboardAvoidingView>
-      </Modal>
+          )}
+      </View>
     </KeyboardAvoidingView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#FFFFFE',
-  },
-  content: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 24,
-  },
-  guide: {
-    fontSize: 24,
-    fontWeight: '600',
-    color: '#000000',
-    textAlign: 'center',
-    lineHeight: 24 * 1.5,
-  },
+  container: { flex: 1, backgroundColor: '#FFFFFE' },
+  content: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 24 },
+  guide: { fontSize: 24, fontWeight: '600', color: '#000000', textAlign: 'center', lineHeight: 36 },
   input: {
-    width: 256,
-    height: 40,
+    width: 256, height: 40,
     backgroundColor: '#FFFFFF',
-    borderWidth: 1,
-    borderColor: '#FF8D28',
-    borderRadius: 12,
-    paddingHorizontal: 14,
-    fontSize: 14,
-    color: '#1A1A1A',
+    borderWidth: 1, borderColor: '#FF8D28',
+    borderRadius: 12, paddingHorizontal: 14,
+    fontSize: 14, color: '#1A1A1A',
   },
-  btnOverride: {
-    width: 274,
-    height: 40,
-    borderRadius: 5,
-  },
-  btnActive: {
-    backgroundColor: '#FF8D28',
-  },
-  btnInactive: {
-    backgroundColor: '#AAAAAA',
-  },
-  btnText: {
-    fontWeight: '700',
-  },
-
-  // 모달
-  modalOverlay: {
-    flex: 1,
-    justifyContent: 'flex-end',
-    alignItems: 'center',
-  },
-  backdrop: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(0,0,0,0.4)',
-  },
-  sheet: {
-    width: 328,
-    backgroundColor: '#FFFFFF',
-    borderRadius: 16,
-    padding: 24,
-    marginBottom: 32,
-    gap: 16,
-  },
-  sheetTitle: {
-    fontSize: 19,
-    fontWeight: '700',
-    color: '#000000',
-  },
-  sheetLabel: {
-    fontSize: 14,
-    color: '#FF8C00',
-  },
-  sheetInput: {
-    height: 48,
-    borderWidth: 1,
-    borderColor: '#FF8C00',
-    borderRadius: 8,
-    paddingHorizontal: 14,
-    fontSize: 16,
-    fontWeight: '500',
-    color: '#000000',
-  },
-  sheetButtons: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginTop: 4,
-  },
-  prevBtn: {
-    paddingVertical: 8,
-    paddingHorizontal: 12,
-  },
-  prevBtnText: {
-    fontSize: 15,
-    fontWeight: '600',
-    color: 'rgba(21,25,32,0.5)',
-  },
-  confirmBtn: {
-    backgroundColor: '#FF8C00',
-    borderRadius: 8,
-    height: 42,
-    paddingHorizontal: 32,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  confirmBtnText: {
-    fontSize: 15,
-    fontWeight: '600',
-    color: '#FFFFFF',
-  },
+  btnOverride: { width: 274, height: 40, borderRadius: 5 },
+  btnActive: { backgroundColor: '#FF8D28' },
+  btnInactive: { backgroundColor: '#AAAAAA' },
+  btnText: { fontWeight: '700' },
 });
