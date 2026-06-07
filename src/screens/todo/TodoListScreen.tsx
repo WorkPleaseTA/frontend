@@ -1,55 +1,91 @@
-import React, { useState } from 'react';
+import React, { useState, useCallback } from 'react';
 import {
   View,
   Text,
   StyleSheet,
-  SafeAreaView,
   TouchableOpacity,
   FlatList,
+  ActivityIndicator,
+  RefreshControl,
+  Alert,
 } from 'react-native';
-import { useNavigation } from '@react-navigation/native';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../../navigation/AppNavigator';
 import { Colors } from '../../constants/colors';
-import { MaterialIcons } from '@expo/vector-icons';
+import { useAuth } from '../../context/AuthContext';
+import api from '../../api/client';
 
 type Nav = NativeStackNavigationProp<RootStackParamList>;
 
-type ToDoItem = {
-  id: string;
-  text: string;
-  done: boolean;
-};
-
-const INITIAL_TODOS: ToDoItem[] = [
-  { id: '1', text: '오전 재고 확인하기', done: true },
-  { id: '2', text: '청소 구역 점검', done: true },
-  { id: '3', text: '음료 레시피 숙지', done: false },
-  { id: '4', text: '팀장님께 보고서 제출', done: false },
-  { id: '5', text: '마감 정산 처리', done: false },
-];
+interface TodoItem {
+  todoId: number;
+  content: string;
+  isDone: boolean;
+  creatorName: string;
+  createdAt: string;
+}
 
 export default function ToDoListScreen() {
   const navigation = useNavigation<Nav>();
-  const [todos, setTodos] = useState<ToDoItem[]>(INITIAL_TODOS);
+  const { storeInfo } = useAuth();
+  const [todos, setTodos] = useState<TodoItem[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
 
-  const toggle = (id: string) => {
-    setTodos((prev) =>
-      prev.map((t) => (t.id === id ? { ...t, done: !t.done } : t))
-    );
+  const loadTodos = useCallback(async () => {
+    if (!storeInfo) return;
+    try {
+      const res = await api.get(`/todos?storeId=${storeInfo.storeId}`);
+      const raw = res.data.data ?? [];
+      setTodos(raw.map((item: any) => ({
+        ...item,
+        todoId: item.todoId ?? item.id,
+        isDone: item.isDone ?? item.done ?? false,
+      })));
+    } catch {
+      // silent
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  }, [storeInfo?.storeId]);
+
+  useFocusEffect(
+    useCallback(() => {
+      setLoading(true);
+      loadTodos();
+    }, [loadTodos])
+  );
+
+  const handleToggle = async (todoId: number) => {
+    try {
+      await api.patch(`/todos/${todoId}/done`);
+      setTodos(prev => prev.map(t => t.todoId === todoId ? { ...t, isDone: !t.isDone } : t));
+    } catch {}
   };
 
-  const doneCount = todos.filter((t) => t.done).length;
+  const handleDelete = async (todoId: number) => {
+    try {
+      await api.delete(`/todos/${todoId}`);
+      setTodos(prev => prev.filter(t => t.todoId !== todoId));
+    } catch {
+      Alert.alert('오류', '삭제 중 오류가 발생했습니다.');
+    }
+  };
+
+  const doneCount = todos.filter(t => t.isDone).length;
 
   return (
     <SafeAreaView style={styles.safe}>
-      {/* Header */}
       <View style={styles.header}>
-        <Text style={styles.headerTitle}>TO-DO LIST</Text>
-        <View style={{ width: 36 }} />
+        <Text style={styles.headerTitle}>할 일 목록</Text>
+        <TouchableOpacity onPress={() => navigation.navigate('ToDoAdd')} hitSlop={8}>
+          <Text style={styles.addIcon}>+</Text>
+        </TouchableOpacity>
       </View>
 
-      {/* Progress summary */}
       <View style={styles.progressBar}>
         <View style={styles.progressTrack}>
           <View
@@ -62,41 +98,65 @@ export default function ToDoListScreen() {
         <Text style={styles.progressText}>{doneCount}/{todos.length} 완료</Text>
       </View>
 
-      {/* 섹션 타이틀 */}
       <View style={styles.sectionHeader}>
         <Text style={styles.sectionTitle}>할 일 목록</Text>
-        <TouchableOpacity onPress={() => navigation.navigate('ToDoEdit')} hitSlop={8}>
-          <MaterialIcons name="edit" size={20} color="#F5A623" />
-        </TouchableOpacity>
       </View>
 
-      <FlatList
-        data={todos}
-        keyExtractor={(item) => item.id}
-        renderItem={({ item }) => (
-          <TouchableOpacity
-            style={styles.row}
-            onPress={() => toggle(item.id)}
-            activeOpacity={0.7}
-          >
-            <View style={[styles.checkbox, item.done && styles.checkboxDone]}>
-              {item.done && <Text style={styles.checkmark}>✓</Text>}
+      {loading ? (
+        <View style={styles.center}>
+          <ActivityIndicator color={Colors.primary} />
+        </View>
+      ) : (
+        <FlatList
+          data={todos}
+          keyExtractor={(item, index) =>
+            item.todoId != null ? String(item.todoId) : `idx-${index}`
+          }
+          renderItem={({ item }) => (
+            <View style={styles.row}>
+              <TouchableOpacity
+                style={[styles.checkbox, item.isDone && styles.checkboxDone]}
+                onPress={() => handleToggle(item.todoId)}
+                activeOpacity={0.7}
+              >
+                {item.isDone && <Text style={styles.checkmark}>✓</Text>}
+              </TouchableOpacity>
+              <Text
+                style={[styles.itemText, item.isDone && styles.itemTextDone]}
+                numberOfLines={2}
+              >
+                {item.content}
+              </Text>
+              <TouchableOpacity
+                onPress={() => handleDelete(item.todoId)}
+                hitSlop={8}
+                style={styles.deleteBtn}
+              >
+                <Text style={styles.deleteIcon}>🗑️</Text>
+              </TouchableOpacity>
             </View>
-            <Text style={[styles.itemText, item.done && styles.itemTextDone]}>
-              {item.text}
-            </Text>
-          </TouchableOpacity>
-        )}
-        ItemSeparatorComponent={() => <View style={styles.separator} />}
-        contentContainerStyle={styles.list}
-        showsVerticalScrollIndicator={false}
-      />
+          )}
+          ItemSeparatorComponent={() => <View style={styles.separator} />}
+          contentContainerStyle={todos.length === 0 ? styles.emptyContainer : styles.list}
+          showsVerticalScrollIndicator={false}
+          ListEmptyComponent={<Text style={styles.empty}>등록된 할 일이 없습니다</Text>}
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={() => { setRefreshing(true); loadTodos(); }}
+              colors={[Colors.primary]}
+              tintColor={Colors.primary}
+            />
+          }
+        />
+      )}
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: '#FFFFFF' },
+  center: { flex: 1, alignItems: 'center', justifyContent: 'center' },
 
   header: {
     flexDirection: 'row',
@@ -113,12 +173,14 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: '#1A1A1A',
   },
-  editIcon: { fontSize: 20 },
+  addIcon: {
+    fontSize: 28,
+    color: Colors.primary,
+    fontWeight: '400',
+    lineHeight: 30,
+  },
 
   sectionHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
     paddingHorizontal: 20,
     paddingTop: 18,
     paddingBottom: 10,
@@ -159,9 +221,10 @@ const styles = StyleSheet.create({
     textAlign: 'right',
   },
 
-  list: {
-    paddingVertical: 8,
-  },
+  list: { paddingVertical: 8 },
+  emptyContainer: { flex: 1, alignItems: 'center', justifyContent: 'center' },
+  empty: { fontSize: 14, color: '#AAAAAA' },
+
   row: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -178,6 +241,7 @@ const styles = StyleSheet.create({
     borderColor: '#DDDDDD',
     alignItems: 'center',
     justifyContent: 'center',
+    flexShrink: 0,
   },
   checkboxDone: {
     backgroundColor: Colors.primary,
@@ -198,6 +262,15 @@ const styles = StyleSheet.create({
     color: '#AAAAAA',
     textDecorationLine: 'line-through',
   },
+  deleteBtn: {
+    width: 32,
+    height: 32,
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexShrink: 0,
+  },
+  deleteIcon: { fontSize: 18 },
+
   separator: {
     height: 1,
     backgroundColor: '#F5F5F5',

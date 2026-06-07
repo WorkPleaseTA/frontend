@@ -3,6 +3,7 @@ import {
   View, Text, TextInput, StyleSheet,
   KeyboardAvoidingView, Platform, Alert, ActivityIndicator,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -72,8 +73,8 @@ export default function LoginScreen() {
   };
 
   return (
-    <View style={styles.container}>
-      <Header title="" showBack />
+    <SafeAreaView style={styles.container}>
+      <Header title="" showBack noBorder />
 
       <KeyboardAvoidingView
         style={styles.inner}
@@ -113,14 +114,14 @@ export default function LoginScreen() {
             )}
         </View>
       </KeyboardAvoidingView>
-    </View>
+    </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#FFFFFE' },
   inner: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 24 },
-  title: { fontSize: 32, fontWeight: '500', color: '#000000', textAlign: 'center' },
+  title: { fontSize: 24, fontWeight: '700', color: '#1A1A1A', textAlign: 'center' },
   inputs: { width: '100%', paddingHorizontal: 52, gap: 12 },
   input: {
     height: 40,

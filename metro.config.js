@@ -11,6 +11,14 @@ const fbjsRoot = path.resolve(__dirname, 'node_modules/fbjs');
 // Metro sometimes fails to resolve these from deep inside node_modules on web.
 // Explicitly redirect all fbjs/* requests to the installed package.
 config.resolver.resolveRequest = (context, moduleName, platform) => {
+  // @stomp/stompjs ESM6 is incompatible with Metro — redirect to UMD bundle
+  if (moduleName === '@stomp/stompjs') {
+    return {
+      type: 'sourceFile',
+      filePath: path.resolve(__dirname, 'node_modules/@stomp/stompjs/bundles/stomp.umd.js'),
+    };
+  }
+
   if (moduleName.startsWith('fbjs/')) {
     const subPath = moduleName.slice('fbjs/'.length);
     const candidate = path.join(fbjsRoot, subPath);

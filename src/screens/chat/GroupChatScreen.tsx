@@ -1,237 +1,343 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   View,
   Text,
   StyleSheet,
-  SafeAreaView,
   TouchableOpacity,
   FlatList,
   TextInput,
   KeyboardAvoidingView,
   Platform,
-  Alert,
+  ActivityIndicator,
   ScrollView,
-  Modal,
+  Alert,
 } from 'react-native';
-import { useNavigation } from '@react-navigation/native';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { useNavigation, useRoute } from '@react-navigation/native';
+import type { RouteProp } from '@react-navigation/native';
+import type { RootStackParamList } from '../../navigation/AppNavigator';
+import { Client } from '@stomp/stompjs';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '../../constants/colors';
+import { useAuth } from '../../context/AuthContext';
+import api from '../../api/client';
 
-const GROUP = { name: '스타벅스 강남점 전체', memberCount: 12 };
-const ME = '홍길동';
+type Route = RouteProp<RootStackParamList, 'GroupChat'>;
 
-const INIT_MSGS = [
-  { id: '1', sender: '김매니저', initial: '김', text: '안녕하세요 여러분! 오늘도 파이팅!', isMe: false, time: '오후 2:50' },
-  { id: '2', sender: ME, initial: '홍', text: '안녕하세요!', isMe: true, time: '오후 2:51' },
-  { id: '3', sender: '이바리스타', initial: '이', text: '내일 미팅 몇 시예요?', isMe: false, time: '오후 2:52' },
-  { id: '4', sender: '김매니저', initial: '김', text: '오전 10시입니다. 모두 참석 부탁드려요!', isMe: false, time: '오후 2:53' },
-  { id: '5', sender: ME, initial: '홍', text: '네, 참석하겠습니다!', isMe: true, time: '오후 2:55' },
-  { id: '6', sender: '박알바', initial: '박', text: '저도 참석합니다 😊', isMe: false, time: '오후 2:56' },
-];
-
-type Msg = (typeof INIT_MSGS)[0];
-
-const AVATAR_BG: Record<string, string> = {
-  '김': '#5B9BD5',
-  '이': '#7B68EE',
-  '박': '#52B788',
-  '최': '#E07070',
-  '홍': Colors.primary,
-};
-
-function SenderAvatar({ initial }: { initial: string }) {
-  const bg = AVATAR_BG[initial] ?? '#AAAAAA';
-  return (
-    <View style={[styles.avatar, { backgroundColor: bg }]}>
-      <Text style={styles.avatarText}>{initial}</Text>
-    </View>
-  );
+interface Message {
+  id: number;
+  content: string;
+  senderName: string;
+  storeMemberId: number;
+  createdAt: string;
+  mine: boolean;
 }
 
-function Bubble({ item, showSender }: { item: Msg; showSender: boolean }) {
+const fmtTime = (iso: string) => {
+  const d = new Date(iso);
+  return d.toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' });
+};
+
+const AVATAR_COLORS = ['#5B9BD5', '#7B68EE', '#52B788', '#E07070', '#F4A261'];
+const avatarColor = (name: string) => AVATAR_COLORS[name.charCodeAt(0) % AVATAR_COLORS.length];
+
+function Bubble({ item, showSender }: { item: Message; showSender: boolean }) {
   return (
-    <View style={[styles.row, item.isMe ? styles.rowMe : styles.rowOther]}>
-      {/* Left avatar slot for others */}
-      {!item.isMe && (
+    <View style={[styles.row, item.mine ? styles.rowMe : styles.rowOther]}>
+      {!item.mine && (
         <View style={styles.avatarSlot}>
-          {showSender && <SenderAvatar initial={item.initial} />}
+          {showSender && (
+            <View style={[styles.avatar, { backgroundColor: avatarColor(item.senderName ?? '?') }]}>
+              <Text style={styles.avatarText}>{(item.senderName ?? '?').charAt(0)}</Text>
+            </View>
+          )}
         </View>
       )}
-
       <View style={styles.msgWrap}>
-        {showSender && !item.isMe && (
-          <Text style={styles.senderName}>{item.sender}</Text>
+        {showSender && !item.mine && (
+          <Text style={styles.senderName}>{item.senderName}</Text>
         )}
-        <View style={[styles.bubble, item.isMe ? styles.bubbleMe : styles.bubbleOther]}>
-          <Text style={[styles.bubbleText, item.isMe && styles.bubbleTextMe]}>
-            {item.text}
+        <View style={[styles.bubble, item.mine ? styles.bubbleMe : styles.bubbleOther]}>
+          <Text style={[styles.bubbleText, item.mine && styles.bubbleTextMe]}>
+            {item.content}
           </Text>
         </View>
-        <Text style={[styles.time, item.isMe ? styles.timeMe : styles.timeOther]}>
-          {item.time}
+        <Text style={[styles.time, item.mine ? styles.timeMe : styles.timeOther]}>
+          {fmtTime(item.createdAt)}
         </Text>
       </View>
     </View>
   );
 }
 
-// 채팅에서 추출한 AI TO-DO 키워드 (실제로는 메시지 분석으로 생성)
-const AI_KEYWORDS = [
-  '오후 3시 쿠팡 택배 및 냉장고 정리',
-  '매장 바닥 청소',
-];
+// ── AI TODO 섹션 ──────────────────────────────────────────────────────────────
 
-function AiTodoSection() {
-  const [modalVisible, setModalVisible] = useState(false);
-  const [selectedIndices, setSelectedIndices] = useState<number[]>([]);
+function AiTodoSection({ roomId, storeId }: { roomId: number; storeId: number }) {
+  const [suggestions, setSuggestions] = useState<string[]>([]);
+  const [selected, setSelected] = useState<number[]>([]);
+  const [extracting, setExtracting] = useState(false);
+  const [saving, setSaving] = useState(false);
 
-  const toggleKeyword = (i: number) => {
-    setSelectedIndices(prev =>
-      prev.includes(i) ? prev.filter(idx => idx !== i) : [...prev, i]
-    );
+  const extract = async () => {
+    setExtracting(true);
+    try {
+      const res = await api.post('/ai/todos/extract', { roomId });
+      // 서버가 data.data.suggestions 또는 data.suggestions 두 구조 모두 처리
+      const sug: string[] = res.data.data?.todos ?? [];
+      setSuggestions(sug);
+      setSelected([]);
+      if (sug.length === 0) {
+        Alert.alert('알림', 'TODO로 추출할 항목이 없습니다.\n채팅 내용이 부족하거나 이미 추출된 내용일 수 있습니다.');
+      }
+    } catch (e: any) {
+      Alert.alert('오류', `AI TODO 추출 실패: ${e?.response?.data?.message ?? e?.message ?? '알 수 없는 오류'}`);
+    } finally {
+      setExtracting(false);
+    }
+  };
+
+  const toggle = (i: number) =>
+    setSelected(prev => prev.includes(i) ? prev.filter(x => x !== i) : [...prev, i]);
+
+  const save = async () => {
+    if (selected.length === 0) return;
+    setSaving(true);
+    try {
+      await Promise.all(
+        selected.map(i => api.post('/todos', { storeId, content: suggestions[i] }))
+      );
+      setSuggestions([]);
+      setSelected([]);
+    } catch {
+      Alert.alert('오류', 'TODO 저장에 실패했습니다.');
+    } finally {
+      setSaving(false);
+    }
   };
 
   return (
     <View style={styles.aiSection}>
-      <Text style={styles.aiSectionTitle}>AI TO-DO 리스트 자동 변환</Text>
-
-      <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        contentContainerStyle={styles.aiRow}
-      >
-        {AI_KEYWORDS.map((kw, i) => {
-          const selected = selectedIndices.includes(i);
-          return (
-            <TouchableOpacity
-              key={i}
-              style={[styles.aiKeyword, selected && styles.aiKeywordSelected]}
-              activeOpacity={0.7}
-              onPress={() => toggleKeyword(i)}
-            >
-              <Text style={[styles.aiKeywordText, selected && styles.aiKeywordTextSelected]}>
-                {kw}
-              </Text>
-            </TouchableOpacity>
-          );
-        })}
-
+      <View style={styles.aiHeader}>
+        <Text style={styles.aiTitle}>AI TO-DO 자동 변환</Text>
         <TouchableOpacity
-          style={styles.aiAddBtn}
+          style={[styles.aiExtractBtn, extracting && { opacity: 0.6 }]}
+          onPress={extract}
+          disabled={extracting}
           activeOpacity={0.8}
-          onPress={() => setModalVisible(true)}
         >
-          <Text style={styles.aiAddBtnText}>추가</Text>
+          {extracting
+            ? <ActivityIndicator size="small" color="#FFFFFF" />
+            : <Text style={styles.aiExtractText}>✨ 추출</Text>
+          }
         </TouchableOpacity>
-      </ScrollView>
+      </View>
 
-      {/* 직접 추가 모달 */}
-      <Modal visible={modalVisible} transparent animationType="fade">
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalBox}>
-            <Text style={styles.modalTitle}>추가하시겠습니까?</Text>
-            <View style={styles.modalButtons}>
-              <TouchableOpacity
-                style={styles.modalCancelBtn}
-                onPress={() => setModalVisible(false)}
-                activeOpacity={0.7}
-              >
-                <Text style={styles.modalCancelText}>취소</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={styles.modalConfirmBtn}
-                onPress={() => setModalVisible(false)}  // TODO: 실제 추가 로직 연결
-                activeOpacity={0.8}
-              >
-                <Text style={styles.modalConfirmText}>확인</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        </View>
-      </Modal>
+      {suggestions.length > 0 && (
+        <>
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.aiChips}
+          >
+            {suggestions.map((s, i) => {
+              const sel = selected.includes(i);
+              return (
+                <TouchableOpacity
+                  key={i}
+                  style={[styles.chip, sel && styles.chipSelected]}
+                  onPress={() => toggle(i)}
+                  activeOpacity={0.7}
+                >
+                  <Text style={[styles.chipText, sel && styles.chipTextSelected]}>{s}</Text>
+                </TouchableOpacity>
+              );
+            })}
+          </ScrollView>
+
+          {selected.length > 0 && (
+            <TouchableOpacity
+              style={[styles.aiSaveBtn, saving && { opacity: 0.6 }]}
+              onPress={save}
+              disabled={saving}
+              activeOpacity={0.85}
+            >
+              {saving
+                ? <ActivityIndicator size="small" color="#FFFFFF" />
+                : <Text style={styles.aiSaveText}>선택 항목 TODO 추가 ({selected.length})</Text>
+              }
+            </TouchableOpacity>
+          )}
+        </>
+      )}
     </View>
   );
 }
 
+// ── 메인 화면 ─────────────────────────────────────────────────────────────────
+
 export default function GroupChatScreen() {
   const navigation = useNavigation();
-  const [msgs, setMsgs] = useState<Msg[]>(INIT_MSGS);
+  const route = useRoute<Route>();
+  const { roomId, roomName } = route.params;
+  const { storeInfo } = useAuth();
+
+  const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
+  const [loading, setLoading] = useState(true);
+  const [connected, setConnected] = useState(false);
   const listRef = useRef<FlatList>(null);
-  const hasText = input.trim().length > 0;
+  const stompRef = useRef<Client | null>(null);
+  const tempIdRef = useRef(-1);
+  const myId = storeInfo?.storeMemberId;
+
+  const scrollToBottom = (animated = true) =>
+    setTimeout(() => listRef.current?.scrollToEnd({ animated }), 80);
+
+  // 메시지 초기 로드 + 읽음 처리
+  useEffect(() => {
+    const load = async () => {
+      try {
+        const res = await api.get(`/chat/rooms/${roomId}/messages?size=30`);
+        const data: Message[] = res.data.data ?? [];
+        // GET 응답은 서버가 mine을 정확히 계산해서 내려주므로 그대로 사용
+        setMessages(data);
+        if (data.length > 0) {
+          const lastId = data[data.length - 1].id;
+          api.post(`/chat/rooms/${roomId}/read`, { lastMessageId: lastId }).catch(() => {});
+        }
+      } catch {
+        // silent
+      } finally {
+        setLoading(false);
+      }
+    };
+    load();
+  }, [roomId]);
+
+  // STOMP 연결
+  useEffect(() => {
+    let client: Client;
+    const connect = async () => {
+      try { await api.get('/stores/me'); } catch {}
+      const token = await AsyncStorage.getItem('accessToken');
+      if (!token) return;
+      client = new Client({
+        webSocketFactory: () => new WebSocket('wss://workmanager.store/ws'),
+        connectHeaders: { Authorization: `Bearer ${token}` },
+        reconnectDelay: 5000,
+        forceBinaryWSFrames: true,
+        appendMissingNULLonIncoming: true,
+        heartbeatIncoming: 0,
+        heartbeatOutgoing: 20000,
+        onConnect: () => {
+          setConnected(true);
+          client.subscribe(`/topic/chat/${roomId}`, frame => {
+            try {
+              const msg = JSON.parse(frame.body);
+              const incoming: Message = { ...msg, mine: msg.storeMemberId === myId };
+              setMessages(prev => {
+                const tempIdx = prev.findIndex(
+                  m => m.id < 0 && m.storeMemberId === myId && m.content === incoming.content
+                );
+                if (tempIdx >= 0) {
+                  const next = [...prev];
+                  next[tempIdx] = incoming;
+                  return next;
+                }
+                return [...prev, incoming];
+              });
+              api.post(`/chat/rooms/${roomId}/read`, { lastMessageId: msg.id }).catch(() => {});
+              scrollToBottom(true);
+            } catch {}
+          });
+        },
+        onDisconnect: () => setConnected(false),
+        onStompError: () => setConnected(false),
+      });
+      client.activate();
+      stompRef.current = client;
+    };
+    connect();
+    return () => {
+      setConnected(false);
+      client?.deactivate();
+    };
+  }, [roomId]);
+
+  useEffect(() => {
+    if (!loading) scrollToBottom(false);
+  }, [loading]);
 
   const send = () => {
     const text = input.trim();
     if (!text) return;
-    const now = new Date();
-    setMsgs((prev) => [
-      ...prev,
-      {
-        id: String(Date.now()),
-        sender: ME,
-        initial: '홍',
-        text,
-        isMe: true,
-        time: now.toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' }),
-      },
-    ]);
+
+    const tempId = tempIdRef.current--;
+    const optimistic: Message = {
+      id: tempId,
+      content: text,
+      senderName: storeInfo?.name ?? '',
+      storeMemberId: myId ?? 0,
+      createdAt: new Date().toISOString(),
+      mine: true,
+    };
+    setMessages(prev => [...prev, optimistic]);
     setInput('');
-    setTimeout(() => listRef.current?.scrollToEnd({ animated: true }), 80);
+    scrollToBottom(true);
+
+    if (connected) {
+      stompRef.current?.publish({
+        destination: `/app/chat/${roomId}`,
+        body: JSON.stringify({ content: text }),
+      });
+    }
   };
 
   return (
     <SafeAreaView style={styles.safe}>
-      {/* ── Header ── */}
       <View style={styles.header}>
         <TouchableOpacity onPress={() => navigation.goBack()} hitSlop={8} style={styles.backBtn}>
           <Text style={styles.backArrow}>←</Text>
         </TouchableOpacity>
-
-        <View style={styles.headerCenter}>
-          <View style={styles.headerNameRow}>
-            <Text style={styles.headerName} numberOfLines={1}>{GROUP.name}</Text>
-            <Text style={styles.memberCount}>{GROUP.memberCount}</Text>
-          </View>
-          <View style={styles.workingBadge}>
-            <View style={styles.workingDot} />
-            <Text style={styles.workingText}>근무중</Text>
-          </View>
-        </View>
-
-        <TouchableOpacity hitSlop={8} style={styles.moreBtn}>
-          <Text style={styles.moreText}>•••</Text>
-        </TouchableOpacity>
+        <Text style={styles.headerName} numberOfLines={1}>{roomName}</Text>
+        <View style={{ width: 36 }} />
       </View>
 
-      {/* ── Messages + Bottom ── */}
       <KeyboardAvoidingView
         style={styles.flex}
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       >
-        <FlatList
-          ref={listRef}
-          data={msgs}
-          keyExtractor={(m) => m.id}
-          renderItem={({ item, index }) => {
-            const prev = index > 0 ? msgs[index - 1] : null;
-            const showSender = !item.isMe && item.sender !== prev?.sender;
-            return <Bubble item={item} showSender={showSender} />;
-          }}
-          contentContainerStyle={styles.msgList}
-          showsVerticalScrollIndicator={false}
-          onContentSizeChange={() => listRef.current?.scrollToEnd({ animated: false })}
-        />
+        {loading ? (
+          <View style={styles.center}>
+            <ActivityIndicator color={Colors.primary} />
+          </View>
+        ) : (
+          <FlatList
+            ref={listRef}
+            data={messages}
+            keyExtractor={m => String(m.id)}
+            renderItem={({ item, index }) => {
+              const prev = index > 0 ? messages[index - 1] : null;
+              const showSender = !item.mine && item.senderName !== prev?.senderName;
+              return <Bubble item={item} showSender={showSender} />;
+            }}
+            contentContainerStyle={styles.msgList}
+            showsVerticalScrollIndicator={false}
+            onContentSizeChange={() => listRef.current?.scrollToEnd({ animated: false })}
+            ListEmptyComponent={
+              <View style={styles.center}>
+                <Text style={styles.empty}>메시지가 없습니다</Text>
+              </View>
+            }
+          />
+        )}
 
-        {/* ── AI TO-DO 자동 변환 영역 ── */}
-        <AiTodoSection />
+        {storeInfo && (
+          <AiTodoSection roomId={roomId} storeId={storeInfo.storeId} />
+        )}
 
-        {/* ── Input bar ── */}
         <View style={styles.inputBar}>
-          {/* Camera */}
-          <TouchableOpacity style={styles.iconBtn}>
-            <Text style={styles.iconText}>📷</Text>
-          </TouchableOpacity>
-
-          {/* Text field */}
           <TextInput
             style={styles.input}
             placeholder="메시지를 입력하세요"
@@ -241,21 +347,10 @@ export default function GroupChatScreen() {
             multiline
             maxLength={500}
           />
-
-          {/* Right — mic+image or send */}
-          {hasText ? (
+          {input.trim().length > 0 && (
             <TouchableOpacity style={styles.sendBtn} onPress={send} activeOpacity={0.8}>
-              <Text style={styles.sendIcon}>▶</Text>
+              <Ionicons name="send" size={16} color="#FFFFFF" />
             </TouchableOpacity>
-          ) : (
-            <View style={styles.rightIcons}>
-              <TouchableOpacity style={styles.iconBtn}>
-                <Text style={styles.iconText}>🖼️</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={styles.iconBtn}>
-                <Text style={styles.iconText}>🎤</Text>
-              </TouchableOpacity>
-            </View>
           )}
         </View>
       </KeyboardAvoidingView>
@@ -266,116 +361,36 @@ export default function GroupChatScreen() {
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: '#FFFFFF' },
   flex: { flex: 1, backgroundColor: '#F6F6F6' },
+  center: { flex: 1, alignItems: 'center', justifyContent: 'center' },
+  empty: { fontSize: 14, color: '#AAAAAA' },
 
-  /* Header */
   header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
+    flexDirection: 'row', alignItems: 'center',
+    paddingHorizontal: 16, paddingVertical: 12,
     backgroundColor: '#FFFFFF',
-    borderBottomWidth: 1,
-    borderBottomColor: '#F0F0F0',
+    borderBottomWidth: 1, borderBottomColor: '#F0F0F0',
   },
   backBtn: { width: 36 },
   backArrow: { fontSize: 22, color: '#1A1A1A' },
-  headerCenter: {
-    flex: 1,
-    alignItems: 'center',
-    gap: 4,
-  },
-  headerNameRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 5,
-  },
-  headerName: {
-    fontSize: 15,
-    fontWeight: '700',
-    color: '#1A1A1A',
-    flexShrink: 1,
-  },
-  memberCount: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: Colors.primary,
-  },
-  workingBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#E8F5E9',
-    borderRadius: 10,
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-    gap: 4,
-  },
-  workingDot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-    backgroundColor: '#2ECC71',
-  },
-  workingText: {
-    fontSize: 11,
-    fontWeight: '600',
-    color: '#27AE60',
-  },
-  moreBtn: { width: 36, alignItems: 'flex-end' },
-  moreText: { fontSize: 14, color: '#888888', letterSpacing: 1 },
+  headerName: { flex: 1, fontSize: 16, fontWeight: '700', color: '#1A1A1A', textAlign: 'center' },
 
-  /* Avatar */
-  avatar: {
-    width: 34,
-    height: 34,
-    borderRadius: 17,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
+  avatar: { width: 34, height: 34, borderRadius: 17, alignItems: 'center', justifyContent: 'center' },
   avatarText: { fontSize: 13, fontWeight: '700', color: '#FFFFFF' },
   avatarSlot: { width: 34, alignItems: 'center' },
 
-  /* Messages */
-  msgList: {
-    paddingHorizontal: 14,
-    paddingTop: 16,
-    paddingBottom: 12,
-    gap: 8,
-  },
-  row: {
-    flexDirection: 'row',
-    alignItems: 'flex-end',
-    gap: 8,
-    marginBottom: 2,
-  },
+  msgList: { paddingHorizontal: 14, paddingTop: 16, paddingBottom: 12, gap: 8 },
+  row: { flexDirection: 'row', alignItems: 'flex-end', gap: 8, marginBottom: 2 },
   rowMe: { flexDirection: 'row-reverse' },
   rowOther: { flexDirection: 'row' },
   msgWrap: { maxWidth: '68%', gap: 3 },
-  senderName: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: '#555555',
-    marginLeft: 2,
-    marginBottom: 3,
-  },
-  bubble: {
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-    borderRadius: 20,
-  },
+  senderName: { fontSize: 12, fontWeight: '600', color: '#555555', marginLeft: 2, marginBottom: 3 },
+  bubble: { paddingHorizontal: 14, paddingVertical: 10, borderRadius: 20 },
   bubbleMe: {
-    backgroundColor: Colors.primary,
-    borderBottomRightRadius: 4,
-    alignSelf: 'flex-end',
+    backgroundColor: Colors.primary, borderBottomRightRadius: 4, alignSelf: 'flex-end',
   },
   bubbleOther: {
-    backgroundColor: '#FFFFFF',
-    borderBottomLeftRadius: 4,
-    alignSelf: 'flex-start',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.07,
-    shadowRadius: 4,
-    elevation: 2,
+    backgroundColor: '#FFFFFF', borderBottomLeftRadius: 4, alignSelf: 'flex-start',
+    shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.07, shadowRadius: 4, elevation: 2,
   },
   bubbleText: { fontSize: 14, color: '#1A1A1A', lineHeight: 20 },
   bubbleTextMe: { color: '#FFFFFF' },
@@ -383,153 +398,47 @@ const styles = StyleSheet.create({
   timeMe: { textAlign: 'right' },
   timeOther: { textAlign: 'left' },
 
-  /* AI TO-DO 영역 */
+  // AI TODO
   aiSection: {
     backgroundColor: '#FFFFFF',
-    borderTopWidth: 1,
-    borderTopColor: '#E9E9E9',
-    paddingHorizontal: 14,
-    paddingTop: 10,
-    paddingBottom: 10,
-    gap: 8,
+    borderTopWidth: 1, borderTopColor: '#E9E9E9',
+    paddingHorizontal: 14, paddingVertical: 10, gap: 8,
   },
-  aiSectionTitle: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: '#000000',
+  aiHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  aiTitle: { fontSize: 13, fontWeight: '600', color: '#1A1A1A' },
+  aiExtractBtn: {
+    backgroundColor: Colors.primary, borderRadius: 12,
+    paddingHorizontal: 12, paddingVertical: 5,
   },
-  aiRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    paddingRight: 4,
+  aiExtractText: { fontSize: 12, fontWeight: '600', color: '#FFFFFF' },
+  aiChips: { flexDirection: 'row', gap: 8, paddingRight: 4 },
+  chip: {
+    backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: '#E9F1FF',
+    borderRadius: 20, paddingHorizontal: 14, paddingVertical: 7,
   },
-  aiKeyword: {
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1,
-    borderColor: '#E9F1FF',
-    borderRadius: 20,
-    paddingHorizontal: 16,
-    paddingVertical: 8,
+  chipSelected: { backgroundColor: Colors.primary, borderWidth: 0 },
+  chipText: { fontSize: 12, color: '#1A1A1A' },
+  chipTextSelected: { color: '#FFFFFF' },
+  aiSaveBtn: {
+    backgroundColor: Colors.primary, borderRadius: 8,
+    paddingVertical: 8, alignItems: 'center',
   },
-  aiKeywordSelected: {
-    backgroundColor: '#FF8D28',
-    borderWidth: 0,
-  },
-  aiKeywordText: {
-    fontSize: 12,
-    color: '#000000',
-  },
-  aiKeywordTextSelected: {
-    color: '#FFFFFF',
-  },
-  aiAddBtn: {
-    backgroundColor: '#FF8D28',
-    borderRadius: 20,
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-  },
-  aiAddBtnText: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: '#FFFFFF',
-  },
+  aiSaveText: { fontSize: 13, fontWeight: '600', color: '#FFFFFF' },
 
-  /* 직접 추가 모달 */
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.4)',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  modalBox: {
-    width: 280,
-    backgroundColor: '#FFFFFF',
-    borderRadius: 16,
-    paddingHorizontal: 24,
-    paddingVertical: 28,
-    alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.15,
-    shadowRadius: 12,
-    elevation: 8,
-    gap: 24,
-  },
-  modalTitle: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#1A1A1A',
-    textAlign: 'center',
-  },
-  modalButtons: {
-    flexDirection: 'row',
-    gap: 12,
-  },
-  modalCancelBtn: {
-    flex: 1,
-    height: 44,
-    borderRadius: 10,
-    backgroundColor: '#F2F2F2',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  modalCancelText: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#888888',
-  },
-  modalConfirmBtn: {
-    flex: 1,
-    height: 44,
-    borderRadius: 10,
-    backgroundColor: '#FF8D28',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  modalConfirmText: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#FFFFFF',
-  },
-
-  /* Input bar */
+  // Input
   inputBar: {
-    flexDirection: 'row',
-    alignItems: 'flex-end',
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    backgroundColor: '#FFFFFF',
-    borderTopWidth: 1,
-    borderTopColor: '#F0F0F0',
-    gap: 6,
+    flexDirection: 'row', alignItems: 'flex-end',
+    paddingHorizontal: 12, paddingVertical: 10,
+    backgroundColor: '#FFFFFF', borderTopWidth: 1, borderTopColor: '#F0F0F0', gap: 6,
   },
-  iconBtn: {
-    width: 36,
-    height: 36,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  iconText: { fontSize: 20 },
   input: {
-    flex: 1,
-    minHeight: 36,
-    maxHeight: 100,
-    backgroundColor: '#F5F5F5',
-    borderRadius: 18,
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    fontSize: 14,
-    color: '#1A1A1A',
+    flex: 1, minHeight: 36, maxHeight: 100,
+    backgroundColor: '#F5F5F5', borderRadius: 18,
+    paddingHorizontal: 14, paddingVertical: 8, fontSize: 14, color: '#1A1A1A',
   },
-  rightIcons: { flexDirection: 'row', alignItems: 'center' },
   sendBtn: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: Colors.primary,
-    alignItems: 'center',
-    justifyContent: 'center',
+    width: 36, height: 36, borderRadius: 18,
+    backgroundColor: Colors.primary, alignItems: 'center', justifyContent: 'center',
   },
   sendIcon: { fontSize: 14, color: '#FFFFFF', marginLeft: 2 },
 });

@@ -8,18 +8,31 @@ import {
   KeyboardAvoidingView,
   Platform,
   Pressable,
+  ActivityIndicator,
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
+import { useAuth } from '../../context/AuthContext';
+import api from '../../api/client';
 
 const SHEET_HEIGHT = 393;
 
 export default function ToDoAddSheet() {
   const navigation = useNavigation();
+  const { storeInfo } = useAuth();
   const [text, setText] = useState('');
+  const [loading, setLoading] = useState(false);
 
-  const handleAdd = () => {
-    if (!text.trim()) return;
-    navigation.goBack();
+  const handleAdd = async () => {
+    if (!text.trim() || !storeInfo || loading) return;
+    setLoading(true);
+    try {
+      await api.post('/todos', { storeId: storeInfo.storeId, content: text.trim() });
+      navigation.goBack();
+    } catch {
+      // stay open on error
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -29,12 +42,10 @@ export default function ToDoAddSheet() {
         style={styles.kav}
       >
         <Pressable style={styles.sheet} onPress={() => {}}>
-          {/* 핸들 */}
           <View style={styles.handleRow}>
             <View style={styles.handle} />
           </View>
 
-          {/* 입력 카드 */}
           <View style={styles.inputCard}>
             <Text style={styles.inputIcon}>✎</Text>
             <TextInput
@@ -50,14 +61,16 @@ export default function ToDoAddSheet() {
             />
           </View>
 
-          {/* TO-DO 추가 버튼 */}
           <TouchableOpacity
-            style={[styles.addBtn, !text.trim() && styles.addBtnDisabled]}
+            style={[styles.addBtn, (!text.trim() || loading) && styles.addBtnDisabled]}
             onPress={handleAdd}
             activeOpacity={0.85}
-            disabled={!text.trim()}
+            disabled={!text.trim() || loading}
           >
-            <Text style={styles.addBtnText}>TO-DO 추가</Text>
+            {loading
+              ? <ActivityIndicator color="#FFFFFF" size="small" />
+              : <Text style={styles.addBtnText}>TO-DO 추가</Text>
+            }
           </TouchableOpacity>
         </Pressable>
       </KeyboardAvoidingView>

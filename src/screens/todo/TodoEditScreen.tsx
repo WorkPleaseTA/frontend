@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useCallback } from 'react';
 import {
   View,
   Text,
@@ -6,39 +6,65 @@ import {
   SafeAreaView,
   TouchableOpacity,
   FlatList,
+  ActivityIndicator,
+  Alert,
 } from 'react-native';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../../navigation/AppNavigator';
 import { Colors } from '../../constants/colors';
-import { BottomTabBarStatic } from '../../components/BottomTabBar';
+import { useAuth } from '../../context/AuthContext';
+import api from '../../api/client';
 
 type Nav = NativeStackNavigationProp<RootStackParamList>;
 
-type ToDoItem = {
-  id: string;
-  text: string;
-};
-
-const INITIAL_TODOS: ToDoItem[] = [
-  { id: '1', text: '오전 재고 확인하기' },
-  { id: '2', text: '청소 구역 점검' },
-  { id: '3', text: '음료 레시피 숙지' },
-  { id: '4', text: '팀장님께 보고서 제출' },
-  { id: '5', text: '마감 정산 처리' },
-];
+interface TodoItem {
+  todoId: number;
+  content: string;
+  isDone: boolean;
+}
 
 export default function ToDoEditScreen() {
   const navigation = useNavigation<Nav>();
-  const [todos, setTodos] = useState<ToDoItem[]>(INITIAL_TODOS);
+  const { storeInfo } = useAuth();
+  const [todos, setTodos] = useState<TodoItem[]>([]);
+  const [loading, setLoading] = useState(true);
 
-  const remove = (id: string) => {
-    setTodos((prev) => prev.filter((t) => t.id !== id));
+  const loadTodos = useCallback(async () => {
+    if (!storeInfo) return;
+    try {
+      const res = await api.get(`/todos?storeId=${storeInfo.storeId}`);
+      const raw = res.data.data ?? [];
+      setTodos(raw.map((item: any) => ({
+        ...item,
+        todoId: item.todoId ?? item.id,
+        isDone: item.isDone ?? item.done ?? false,
+      })));
+    } catch {
+      // silent
+    } finally {
+      setLoading(false);
+    }
+  }, [storeInfo?.storeId]);
+
+  useFocusEffect(
+    useCallback(() => {
+      setLoading(true);
+      loadTodos();
+    }, [loadTodos])
+  );
+
+  const handleDelete = async (todoId: number) => {
+    try {
+      await api.delete(`/todos/${todoId}`);
+      setTodos(prev => prev.filter(t => t.todoId !== todoId));
+    } catch {
+      Alert.alert('오류', '삭제 중 오류가 발생했습니다.');
+    }
   };
 
   return (
     <SafeAreaView style={styles.safe}>
-      {/* Header */}
       <View style={styles.header}>
         <TouchableOpacity onPress={() => navigation.goBack()} hitSlop={8} style={styles.backBtn}>
           <Text style={styles.backArrow}>←</Text>
@@ -47,31 +73,36 @@ export default function ToDoEditScreen() {
         <View style={styles.placeholder} />
       </View>
 
-      {/* List */}
-      <FlatList
-        data={todos}
-        keyExtractor={(item) => item.id}
-        renderItem={({ item }) => (
-          <View style={styles.row}>
-            <View style={styles.dragHandle}>
-              <Text style={styles.dragIcon}>☰</Text>
+      {loading ? (
+        <View style={styles.center}>
+          <ActivityIndicator color={Colors.primary} />
+        </View>
+      ) : (
+        <FlatList
+          data={todos}
+          keyExtractor={item => String(item.todoId)}
+          renderItem={({ item }) => (
+            <View style={styles.row}>
+              <View style={styles.dragHandle}>
+                <Text style={styles.dragIcon}>☰</Text>
+              </View>
+              <Text style={styles.itemText} numberOfLines={1}>{item.content}</Text>
+              <TouchableOpacity
+                onPress={() => handleDelete(item.todoId)}
+                hitSlop={8}
+                style={styles.deleteBtn}
+              >
+                <Text style={styles.deleteIcon}>🗑️</Text>
+              </TouchableOpacity>
             </View>
-            <Text style={styles.itemText} numberOfLines={1}>{item.text}</Text>
-            <TouchableOpacity
-              onPress={() => remove(item.id)}
-              hitSlop={8}
-              style={styles.deleteBtn}
-            >
-              <Text style={styles.deleteIcon}>🗑️</Text>
-            </TouchableOpacity>
-          </View>
-        )}
-        ItemSeparatorComponent={() => <View style={styles.separator} />}
-        contentContainerStyle={styles.list}
-        showsVerticalScrollIndicator={false}
-      />
+          )}
+          ItemSeparatorComponent={() => <View style={styles.separator} />}
+          contentContainerStyle={styles.list}
+          showsVerticalScrollIndicator={false}
+          ListEmptyComponent={<Text style={styles.empty}>등록된 할 일이 없습니다</Text>}
+        />
+      )}
 
-      {/* Add button */}
       <View style={styles.footer}>
         <TouchableOpacity
           style={styles.addBtn}
@@ -81,13 +112,13 @@ export default function ToDoEditScreen() {
           <Text style={styles.addBtnText}>+ 직접 추가하기</Text>
         </TouchableOpacity>
       </View>
-      <BottomTabBarStatic activeIndex={4} />
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: '#FFFFFF' },
+  center: { flex: 1, alignItems: 'center', justifyContent: 'center' },
 
   header: {
     flexDirection: 'row',
@@ -109,9 +140,8 @@ const styles = StyleSheet.create({
   },
   placeholder: { width: 36 },
 
-  list: {
-    paddingVertical: 8,
-  },
+  list: { paddingVertical: 8 },
+  empty: { fontSize: 14, color: '#AAAAAA', textAlign: 'center', padding: 40 },
   row: {
     flexDirection: 'row',
     alignItems: 'center',

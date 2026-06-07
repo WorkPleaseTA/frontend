@@ -9,7 +9,7 @@ import {
   RefreshControl,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../navigation/AppNavigator';
 import { Colors } from '../constants/colors';
@@ -19,10 +19,9 @@ import api from '../api/client';
 type Nav = NativeStackNavigationProp<RootStackParamList>;
 
 interface TodaySchedule {
-  storeId: number;
-  storeName: string;
-  startTime: string;
-  endTime: string;
+  storeMemberId: number;
+  startTime: string | null;
+  endTime: string | null;
   isSubstitute: boolean;
 }
 
@@ -33,6 +32,14 @@ interface Todo {
 }
 
 const fmt = (t?: string | null) => t?.substring(0, 5) ?? '--:--';
+
+function getGreeting() {
+  const h = new Date().getHours();
+  if (h >= 6  && h < 12) return '좋은 아침이에요';
+  if (h >= 12 && h < 18) return '좋은 오후예요';
+  if (h >= 18 && h < 22) return '좋은 저녁이에요';
+  return '편안한 밤이에요';
+}
 
 export default function HomeScreen() {
   const navigation = useNavigation<Nav>();
@@ -48,15 +55,26 @@ export default function HomeScreen() {
       return;
     }
     try {
+      const today = new Date();
+      const pad = (n: number) => String(n).padStart(2, '0');
+      const dateStr = `${today.getFullYear()}-${pad(today.getMonth() + 1)}-${pad(today.getDate())}`;
+
       const [schedRes, todoRes] = await Promise.allSettled([
-        api.get(`/schedule/my/today?storeId=${storeInfo.storeId}`),
+        api.get(`/stores/${storeInfo.storeId}/schedules?date=${dateStr}`),
         api.get(`/todos?storeId=${storeInfo.storeId}`),
       ]);
       if (schedRes.status === 'fulfilled') {
-        setSchedule(schedRes.value.data.data ?? null);
+        const all: any[] = schedRes.value.data.data ?? [];
+        const mine = all.find((s) => s.storeMemberId === storeInfo.storeMemberId) ?? null;
+        setSchedule(mine);
       }
       if (todoRes.status === 'fulfilled') {
-        setTodos(todoRes.value.data.data ?? []);
+        const raw = todoRes.value.data.data ?? [];
+        setTodos(raw.map((item: any) => ({
+          ...item,
+          todoId: item.todoId ?? item.id,
+          isDone: item.isDone ?? item.done ?? false,
+        })));
       }
     } finally {
       setLoading(false);
@@ -66,11 +84,16 @@ export default function HomeScreen() {
 
   useEffect(() => { loadData(); }, [loadData]);
 
+  useFocusEffect(
+    useCallback(() => {
+      loadData();
+    }, [loadData])
+  );
+
   const handleToggle = async (todoId: number) => {
     try {
-      const res = await api.patch(`/todos/${todoId}/done`);
-      const updated = res.data.data;
-      setTodos(prev => prev.map(t => t.todoId === todoId ? { ...t, isDone: updated.isDone } : t));
+      await api.patch(`/todos/${todoId}/done`);
+      setTodos(prev => prev.map(t => t.todoId === todoId ? { ...t, isDone: !t.isDone } : t));
     } catch {}
   };
 
@@ -85,7 +108,7 @@ export default function HomeScreen() {
     <SafeAreaView style={s.safe}>
       <View style={s.header}>
         <View style={{ width: 32 }} />
-        <Text style={s.headerTitle}>Home</Text>
+        <Text style={s.headerTitle}>홈</Text>
         <TouchableOpacity onPress={handleLogout} activeOpacity={0.7}>
           <Text style={s.logoutBtn}>로그아웃</Text>
         </TouchableOpacity>
@@ -110,7 +133,7 @@ export default function HomeScreen() {
           <View style={s.greetingRow}>
             <View>
               <Text style={s.greetingName}>{displayName ? `${displayName}님,` : '안녕하세요,'}</Text>
-              <Text style={s.greetingMsg}>좋은 아침입니다 🙌</Text>
+              <Text style={s.greetingMsg}>{getGreeting()}</Text>
             </View>
             <View style={s.dotsCol}>
               <View style={s.dotLg} />
@@ -138,7 +161,7 @@ export default function HomeScreen() {
                   <Text style={s.scheduleTime}>
                     {fmt(schedule.startTime)} ~ {fmt(schedule.endTime)}
                   </Text>
-                  <Text style={s.scheduleCafe}>{schedule.storeName}</Text>
+                  <Text style={s.scheduleCafe}>{storeInfo?.name ?? ''}</Text>
                 </View>
               </View>
             ) : (
@@ -152,7 +175,7 @@ export default function HomeScreen() {
           <View style={s.section}>
             <TouchableOpacity
               style={s.sectionHeader}
-              onPress={() => navigation.navigate('ToDoList')}
+              onPress={() => (navigation as any).navigate('Todo')}
               activeOpacity={0.7}
             >
               <Text style={s.sectionTitle}>오늘의 업무</Text>
@@ -198,7 +221,7 @@ const s = StyleSheet.create({
   header: {
     flexDirection: 'row', alignItems: 'center',
     paddingHorizontal: 16, paddingVertical: 14,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: '#FAFAFA',
   },
   headerTitle: {
     flex: 1, textAlign: 'center',

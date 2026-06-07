@@ -7,13 +7,17 @@ import {
   Pressable,
   ScrollView,
   Alert,
+  ActivityIndicator,
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { Colors } from '../../constants/colors';
+import { useAuth } from '../../context/AuthContext';
+import api from '../../api/client';
 
 // ── Constants ──────────────────────────────────────────────────────────────
 
 const DAYS = ['월', '화', '수', '목', '금', '토', '일'];
+const DAY_NAMES = ['MONDAY', 'TUESDAY', 'WEDNESDAY', 'THURSDAY', 'FRIDAY', 'SATURDAY', 'SUNDAY'];
 
 const TIMES: string[] = [];
 for (let h = 0; h < 24; h++) {
@@ -82,17 +86,19 @@ const td = StyleSheet.create({
 
 export default function AiSubstituteTimeScreen() {
   const navigation = useNavigation();
+  const { storeInfo } = useAuth();
 
-  const [selectedDays, setSelectedDays] = useState<number[]>([0, 2, 4]);
-  const [startTime, setStartTime] = useState('09:00');
-  const [endTime,   setEndTime]   = useState('18:00');
+  const [selectedDays, setSelectedDays] = useState<number[]>([]);
+  const [startTime, setStartTime]       = useState('09:00');
+  const [endTime,   setEndTime]         = useState('18:00');
+  const [saving,    setSaving]          = useState(false);
 
   const toggleDay = (i: number) =>
     setSelectedDays((prev) =>
       prev.includes(i) ? prev.filter((d) => d !== i) : [...prev, i]
     );
 
-  const handleConfirm = () => {
+  const handleConfirm = async () => {
     if (selectedDays.length === 0) {
       Alert.alert('요일 선택', '최소 하나의 요일을 선택하세요.');
       return;
@@ -101,9 +107,39 @@ export default function AiSubstituteTimeScreen() {
       Alert.alert('시간 오류', '종료 시간이 시작 시간보다 늦어야 합니다.');
       return;
     }
-    Alert.alert('저장 완료', '대타 가능 시간대가 저장되었습니다.', [
-      { text: '확인', onPress: () => navigation.goBack() },
-    ]);
+    if (!storeInfo) return;
+
+    setSaving(true);
+    try {
+      const results = await Promise.allSettled(
+        selectedDays.map((dayIdx) =>
+          api.post('/substitute/availability', {
+            storeId: storeInfo.storeId,
+            dayOfWeek: DAY_NAMES[dayIdx],
+            startTime: `${startTime}:00`,
+            endTime: `${endTime}:00`,
+          })
+        )
+      );
+
+      const failures = results.filter((r) => r.status === 'rejected');
+      if (failures.length > 0 && failures.length < selectedDays.length) {
+        Alert.alert(
+          '일부 저장 실패',
+          '이미 등록된 시간대이거나 고정 스케줄과 겹치는 요일이 있습니다.',
+          [{ text: '확인', onPress: () => navigation.goBack() }]
+        );
+      } else if (failures.length === selectedDays.length) {
+        const msg = (failures[0] as PromiseRejectedResult).reason?.response?.data?.message;
+        Alert.alert('저장 실패', msg ?? '이미 등록된 시간대이거나 고정 스케줄과 겹칩니다.');
+      } else {
+        navigation.goBack();
+      }
+    } catch {
+      Alert.alert('오류', '저장에 실패했습니다.');
+    } finally {
+      setSaving(false);
+    }
   };
 
   return (
@@ -151,11 +187,24 @@ export default function AiSubstituteTimeScreen() {
 
         {/* ── 버튼 ── */}
         <View style={s.btnRow}>
-          <TouchableOpacity style={s.cancelBtn} onPress={() => navigation.goBack()} activeOpacity={0.8}>
+          <TouchableOpacity
+            style={s.cancelBtn}
+            onPress={() => navigation.goBack()}
+            activeOpacity={0.8}
+            disabled={saving}
+          >
             <Text style={s.cancelText}>이전</Text>
           </TouchableOpacity>
-          <TouchableOpacity style={s.confirmBtn} onPress={handleConfirm} activeOpacity={0.85}>
-            <Text style={s.confirmText}>확인</Text>
+          <TouchableOpacity
+            style={s.confirmBtn}
+            onPress={handleConfirm}
+            activeOpacity={0.85}
+            disabled={saving}
+          >
+            {saving
+              ? <ActivityIndicator size="small" color="#FFFFFF" />
+              : <Text style={s.confirmText}>확인</Text>
+            }
           </TouchableOpacity>
         </View>
 
@@ -165,7 +214,6 @@ export default function AiSubstituteTimeScreen() {
 }
 
 const s = StyleSheet.create({
-  /* Dimmed overlay — fills the whole screen */
   backdrop: {
     flex: 1,
     backgroundColor: 'rgba(0,0,0,0.5)',
@@ -174,7 +222,6 @@ const s = StyleSheet.create({
     paddingHorizontal: 28,
   },
 
-  /* White rounded popup card */
   card: {
     width: '100%',
     backgroundColor: '#FFFFFF',
@@ -204,7 +251,6 @@ const s = StyleSheet.create({
   section: { gap: 8 },
   label: { fontSize: 12, fontWeight: '700', color: '#666666' },
 
-  /* Day buttons — compact */
   dayRow: { flexDirection: 'row', gap: 4 },
   dayBtn: {
     flex: 1, height: 36, borderRadius: 8,
@@ -215,11 +261,9 @@ const s = StyleSheet.create({
   dayText: { fontSize: 12, fontWeight: '700', color: '#BBBBBB' },
   dayTextActive: { color: '#FFFFFF' },
 
-  /* Time row — single line */
   timeRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   tilde: { fontSize: 18, color: '#CCCCCC', fontWeight: '300' },
 
-  /* Buttons */
   btnRow: { flexDirection: 'row', gap: 8, marginTop: 4 },
   cancelBtn: {
     flex: 1, borderWidth: 1.5, borderColor: '#E8E8E8',

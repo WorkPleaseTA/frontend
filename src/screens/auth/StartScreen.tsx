@@ -13,23 +13,22 @@ export default function StartScreen() {
 
   return (
     <View style={[styles.container, { paddingTop: insets.top, paddingBottom: insets.bottom }]}>
+      {/* 로고 + 부제목 */}
       <View style={styles.illustrationArea}>
         <Image
           source={require('../../../assets/logo.png')}
           style={styles.logo}
           resizeMode="contain"
         />
+        <Text style={styles.subtitle}>스마트한 업장 관리의 시작</Text>
       </View>
 
-      <Text style={styles.welcome}>Welcome</Text>
-      <Text style={styles.subtitle}>
-        일해조와 함께{'\n'}스마트하게 일해보세요
-      </Text>
-
+      {/* 버튼 영역 */}
       <View style={styles.buttonArea}>
         <TouchableOpacity
           style={styles.loginButton}
           onPress={() => navigation.navigate('Login')}
+          activeOpacity={0.85}
         >
           <Text style={styles.loginText}>로그인</Text>
         </TouchableOpacity>
@@ -37,6 +36,7 @@ export default function StartScreen() {
         <TouchableOpacity
           style={styles.signUpButton}
           onPress={() => navigation.navigate('SignUp')}
+          activeOpacity={0.85}
         >
           <Text style={styles.signUpText}>회원가입</Text>
         </TouchableOpacity>
@@ -48,59 +48,58 @@ export default function StartScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#FFFFFE',
+    backgroundColor: '#FFFFFF',
   },
   illustrationArea: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
+    gap: 16,
   },
   logo: {
-    width: 200,
-    height: 200,
-  },
-  welcome: {
-    fontSize: 32,
-    fontWeight: '500',
-    color: '#000000',
-    textAlign: 'center',
-    marginBottom: 12,
+    width: 180,
+    height: 180,
   },
   subtitle: {
-    fontSize: 15,
+    fontSize: 14,
     fontWeight: '400',
-    color: '#2C3948',
+    color: '#888888',
     textAlign: 'center',
-    lineHeight: 22,
-    marginBottom: 40,
   },
   buttonArea: {
-    paddingHorizontal: 43,
-    paddingBottom: 40,
+    paddingHorizontal: 28,
+    paddingBottom: 28,
+    gap: 12,
   },
   loginButton: {
-    height: 40,
+    height: 52,
     backgroundColor: '#FF8D28',
-    borderRadius: 5,
+    borderRadius: 14,
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: 12,
+    shadowColor: '#FF8D28',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 4,
   },
   loginText: {
-    fontSize: 14,
+    fontSize: 16,
     fontWeight: '700',
     color: '#FFFFFF',
   },
   signUpButton: {
-    height: 40,
-    backgroundColor: '#C7C7CC',
-    borderRadius: 5,
+    height: 52,
+    backgroundColor: 'transparent',
+    borderRadius: 14,
+    borderWidth: 1.5,
+    borderColor: '#FF8D28',
     justifyContent: 'center',
     alignItems: 'center',
   },
   signUpText: {
-    fontSize: 14,
+    fontSize: 16,
     fontWeight: '700',
-    color: '#FFFFFF',
+    color: '#FF8D28',
   },
 });

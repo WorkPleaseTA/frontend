@@ -3,6 +3,7 @@ import {
   View, Text, TextInput, TouchableOpacity, StyleSheet,
   ScrollView, KeyboardAvoidingView, Platform, Alert, ActivityIndicator,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -73,11 +74,12 @@ export default function ManagerSignUpScreen() {
   };
 
   return (
-    <KeyboardAvoidingView
-      style={styles.container}
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-    >
-      <Header title="" showBack />
+    <SafeAreaView style={styles.container}>
+      <KeyboardAvoidingView
+        style={{ flex: 1 }}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      >
+      <Header title="" showBack noBorder />
 
       <ScrollView
         contentContainerStyle={styles.scroll}
@@ -155,14 +157,15 @@ export default function ManagerSignUpScreen() {
             )}
         </View>
       </ScrollView>
-    </KeyboardAvoidingView>
+      </KeyboardAvoidingView>
+    </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#FFFFFE' },
   scroll: { paddingBottom: 48 },
-  title: { fontSize: 32, fontWeight: '500', color: '#000000', textAlign: 'center', marginTop: 32, marginBottom: 28 },
+  title: { fontSize: 24, fontWeight: '700', color: '#1A1A1A', textAlign: 'center', marginTop: 24, marginBottom: 24 },
   sectionLabel: { fontSize: 14, color: '#FF8C00', marginLeft: 57, marginBottom: 12 },
   fieldWrap: { paddingHorizontal: 57, marginBottom: 12 },
   input: {

@@ -9,9 +9,10 @@ interface HeaderProps {
   onBackPress?: () => void;
   rightElement?: React.ReactNode;
   titleStyle?: TextStyle;
+  noBorder?: boolean;
 }
 
-export default function Header({ title, showBack = true, onBackPress, rightElement, titleStyle }: HeaderProps) {
+export default function Header({ title, showBack = true, onBackPress, rightElement, titleStyle, noBorder }: HeaderProps) {
   const navigation = useNavigation();
 
   const handleBack = () => {
@@ -23,7 +24,7 @@ export default function Header({ title, showBack = true, onBackPress, rightEleme
   };
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, noBorder && { borderBottomWidth: 0 }]}>
       <View style={styles.side}>
         {showBack && (
           <TouchableOpacity onPress={handleBack} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
