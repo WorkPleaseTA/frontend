@@ -1,103 +1,99 @@
-import React, { useState } from 'react';
+import React, { useState, useCallback } from 'react';
 import {
   View,
   Text,
   StyleSheet,
-  SafeAreaView,
   TouchableOpacity,
   FlatList,
+  ActivityIndicator,
+  Alert,
 } from 'react-native';
-import { useNavigation } from '@react-navigation/native';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../../navigation/AppNavigator';
+import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '../../constants/colors';
+import { useAuth } from '../../context/AuthContext';
+import api from '../../api/client';
 
 type Nav = NativeStackNavigationProp<RootStackParamList>;
-type Status = 'new' | 'pending' | 'rejected' | 'accepted';
+type SubStatus = 'WAITING' | 'ACCEPTED' | 'DECLINED';
 
-type Request = {
-  id: string;
-  date: string;
-  time: string;
-  name: string;
+interface IncomingItem {
+  candidateId: number;
+  requesterName: string;
+  requestDate: string;
+  startTime: string;
+  endTime: string;
   message: string;
-  status: Status;
+  myStatus: SubStatus;
+  requestStatus: SubStatus;
+}
+
+interface MyCandidate {
+  candidateId: number;
+  staffName: string;
+  status: SubStatus;
+}
+interface MyItem {
+  requestId: number;
+  requestDate: string;
+  startTime: string;
+  endTime: string;
+  message: string;
+  candidates: MyCandidate[];
+  createdAt: string;
+}
+
+const fmtDate = (d: string) => {
+  try {
+    const [, m, dd] = d.split('-');
+    return `${Number(m)}월 ${Number(dd)}일`;
+  } catch { return d; }
 };
+const fmtTime = (t: string) => t.slice(0, 5);
 
-// ── Mock data ──────────────────────────────────────────────────────────────
+// ── 들어온 요청 카드 ──────────────────────────────────────────────────────────
 
-const INITIAL_INCOMING: Request[] = [
-  { id: 'i1', date: '9월 11일', time: '11:00~12:00', name: '청유나', message: '자격증 시험 때문에 대타 요청드립니다ㅜㅜ', status: 'new'      },
-  { id: 'i2', date: '9월 11일', time: '11:00~12:00', name: '밀해오', message: '개인 사정으로 인해 대타 요청합니다.',         status: 'pending'  },
-  { id: 'i3', date: '9월 11일', time: '11:00~12:00', name: '김희영', message: '가족 행사가 생겼어요. 대타 가능하신지요.',   status: 'rejected' },
-];
-
-const INITIAL_MINE: Request[] = [
-  { id: 'm1', date: '9월 11일', time: '11:00~12:00', name: '청유나', message: '자격증 시험 때문에 대타 요청드립니다ㅜㅜ', status: 'accepted' },
-  { id: 'm2', date: '9월 11일', time: '11:00~12:00', name: '정혜영', message: '개인 사정으로 인해 대타 요청합니다.',         status: 'pending'  },
-  { id: 'm3', date: '9월 11일', time: '11:00~12:00', name: '김희영', message: '가족 행사가 생겼어요. 대타 가능하신지요.',   status: 'rejected' },
-];
-
-// ── Status badge ───────────────────────────────────────────────────────────
-
-const STATUS_CONFIG: Record<Status, { label: string; bg: string; text: string }> = {
-  new:      { label: '신규', bg: '#FFF0E6', text: Colors.primary },
-  pending:  { label: '대기', bg: '#F2F2F2', text: '#888888'       },
-  rejected: { label: '거절', bg: '#F2F2F2', text: '#888888'       },
-  accepted: { label: '수락', bg: '#E8F5E9', text: '#4CAF50'       },
-};
-
-// 내 요청 현황용 pill 배지 색상
-const MINE_PILL: Record<Status, string> = {
-  accepted: '#4CAF50',
-  pending:  '#AAAAAA',
-  rejected: '#FF6B2C',
-  new:      Colors.primary,
-};
-
-// ── Request card ───────────────────────────────────────────────────────────
-
-function RequestCard({
-  item,
-  onAccept,
-  onReject,
+function IncomingCard({
+  item, onAccept, onDecline,
 }: {
-  item: Request;
-  onAccept?: () => void;
-  onReject?: () => void;
+  item: IncomingItem;
+  onAccept: () => void;
+  onDecline: () => void;
 }) {
-  const cfg = STATUS_CONFIG[item.status];
-  const showButtons = item.status === 'new';
+  const closed   = item.requestStatus === 'ACCEPTED' && item.myStatus === 'WAITING';
+  const showBtns = item.myStatus === 'WAITING' && !closed;
+
+  const badge =
+    closed                         ? { label: '마감', bg: '#F0F0F0', color: '#AAAAAA' }
+    : item.myStatus === 'ACCEPTED' ? { label: '수락', bg: '#E8F5E9', color: '#4CAF50' }
+    : item.myStatus === 'DECLINED' ? { label: '거절', bg: '#F2F2F2', color: '#888888' }
+    :                                { label: '신규', bg: '#FFF0E6', color: Colors.primary };
 
   return (
-    <View style={card.wrap}>
-      {/* Top row: date/time + status badge */}
-      <View style={card.topRow}>
-        <Text style={card.dateTime}>{item.date} · {item.time}</Text>
-        <View style={[card.badge, { backgroundColor: cfg.bg }]}>
-          <Text style={[card.badgeText, { color: cfg.text }]}>{cfg.label}</Text>
+    <View style={crd.wrap}>
+      <View style={crd.topRow}>
+        <Text style={crd.dateTime}>
+          {fmtDate(item.requestDate)} · {fmtTime(item.startTime)}~{fmtTime(item.endTime)}
+        </Text>
+        <View style={[crd.badge, { backgroundColor: badge.bg }]}>
+          <Text style={[crd.badgeText, { color: badge.color }]}>{badge.label}</Text>
         </View>
       </View>
-
-      {/* Name row */}
-      <Text style={card.name}>{item.name}님의 요청</Text>
-
-      {/* Message row */}
-      <View style={card.msgRow}>
-        <View style={card.avatar}>
-          <Text style={card.avatarIcon}>👤</Text>
-        </View>
-        <Text style={card.msg} numberOfLines={1}>{item.message}</Text>
+      <Text style={crd.name}>{item.requesterName}님의 요청</Text>
+      <View style={crd.msgRow}>
+        <View style={crd.avatar}><Text style={crd.avatarIcon}>👤</Text></View>
+        <Text style={crd.msg} numberOfLines={2}>{item.message}</Text>
       </View>
-
-      {/* Action buttons (신규만) */}
-      {showButtons && (
-        <View style={card.btnRow}>
-          <TouchableOpacity style={card.rejectBtn} onPress={onReject} activeOpacity={0.8}>
-            <Text style={card.rejectText}>거절</Text>
+      {showBtns && (
+        <View style={crd.btnRow}>
+          <TouchableOpacity style={crd.rejectBtn} onPress={onDecline} activeOpacity={0.8}>
+            <Text style={crd.rejectText}>거절</Text>
           </TouchableOpacity>
-          <TouchableOpacity style={card.acceptBtn} onPress={onAccept} activeOpacity={0.85}>
-            <Text style={card.acceptText}>수락</Text>
+          <TouchableOpacity style={crd.acceptBtn} onPress={onAccept} activeOpacity={0.85}>
+            <Text style={crd.acceptText}>수락</Text>
           </TouchableOpacity>
         </View>
       )}
@@ -105,46 +101,52 @@ function RequestCard({
   );
 }
 
-const card = StyleSheet.create({
-  wrap:     { backgroundColor: '#FFFFFF', paddingHorizontal: 16, paddingVertical: 14, gap: 8 },
-  topRow:   { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  dateTime: { fontSize: 12, color: '#999999', fontWeight: '500' },
-  badge:    { borderRadius: 8, paddingHorizontal: 8, paddingVertical: 3 },
-  badgeText:{ fontSize: 11, fontWeight: '700' },
-  name:     { fontSize: 15, fontWeight: '700', color: '#1A1A1A' },
-  msgRow:   { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  avatar:   { width: 28, height: 28, borderRadius: 14, backgroundColor: '#EEEEEE', alignItems: 'center', justifyContent: 'center' },
+const crd = StyleSheet.create({
+  wrap:      { backgroundColor: '#FFFFFF', paddingHorizontal: 16, paddingVertical: 14, gap: 8 },
+  topRow:    { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  dateTime:  { fontSize: 12, color: '#999999', fontWeight: '500' },
+  badge:     { borderRadius: 8, paddingHorizontal: 8, paddingVertical: 3 },
+  badgeText: { fontSize: 11, fontWeight: '700' },
+  name:      { fontSize: 15, fontWeight: '700', color: '#1A1A1A' },
+  msgRow:    { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  avatar:    { width: 28, height: 28, borderRadius: 14, backgroundColor: '#EEEEEE', alignItems: 'center', justifyContent: 'center' },
   avatarIcon: { fontSize: 14 },
-  msg:      { flex: 1, fontSize: 13, color: '#AAAAAA' },
-  btnRow:   { flexDirection: 'row', gap: 8, marginTop: 4 },
-  rejectBtn:{ flex: 1, paddingVertical: 9, borderRadius: 8, alignItems: 'center', backgroundColor: '#F2F2F2' },
+  msg:       { flex: 1, fontSize: 13, color: '#AAAAAA' },
+  btnRow:    { flexDirection: 'row', gap: 8, marginTop: 4 },
+  rejectBtn: { flex: 1, paddingVertical: 9, borderRadius: 8, alignItems: 'center', backgroundColor: '#F2F2F2' },
   rejectText:{ fontSize: 13, fontWeight: '600', color: '#888888' },
-  acceptBtn:{ flex: 1, paddingVertical: 9, borderRadius: 8, alignItems: 'center', backgroundColor: Colors.primary },
+  acceptBtn: { flex: 1, paddingVertical: 9, borderRadius: 8, alignItems: 'center', backgroundColor: Colors.primary },
   acceptText:{ fontSize: 13, fontWeight: '600', color: '#FFFFFF' },
 });
 
-// ── Mine card (내 요청 현황 — 원형 배지, 버튼 없음) ──────────────────────────
+// ── 내 요청 현황 카드 ─────────────────────────────────────────────────────────
 
-function MineCard({ item }: { item: Request }) {
-  const pillColor = MINE_PILL[item.status] ?? '#AAAAAA';
-  const label     = STATUS_CONFIG[item.status]?.label ?? '';
+function MineCard({ item }: { item: MyItem }) {
+  const candidates = item.candidates ?? [];
+  const hasAcc  = candidates.some(c => c.status === 'ACCEPTED');
+  const allDec  = candidates.length > 0 && candidates.every(c => c.status === 'DECLINED');
+  const color   = hasAcc ? '#4CAF50' : allDec ? '#888888' : '#AAAAAA';
+  const label   = hasAcc ? '수락' : allDec ? '거절' : '대기';
+  const waiting = candidates.filter(c => c.status === 'WAITING').length;
 
   return (
     <View style={mc.wrap}>
-      {/* Content (left) + Circle badge (right) */}
       <View style={mc.row}>
         <View style={mc.content}>
-          <Text style={mc.dateTime}>{item.date} · {item.time}</Text>
-          <Text style={mc.name}>{item.name}님의 요청</Text>
+          <Text style={mc.dateTime}>
+            {fmtDate(item.requestDate)} · {fmtTime(item.startTime)}~{fmtTime(item.endTime)}
+          </Text>
+          <Text style={mc.name}>대타 요청 ({candidates.length}명)</Text>
           <View style={mc.msgRow}>
-            <View style={mc.avatar}>
-              <Text style={mc.avatarIcon}>👤</Text>
-            </View>
+            <View style={mc.ava}><Text style={mc.avaIcon}>👤</Text></View>
             <Text style={mc.msg} numberOfLines={1}>{item.message}</Text>
           </View>
+          {waiting > 0 && (
+            <Text style={mc.sub}>{waiting}명 응답 대기 중</Text>
+          )}
         </View>
-        <View style={[mc.circle, { borderColor: pillColor }]}>
-          <Text style={[mc.circleText, { color: pillColor }]}>{label}</Text>
+        <View style={[mc.circle, { borderColor: color }]}>
+          <Text style={[mc.circleText, { color }]}>{label}</Text>
         </View>
       </View>
     </View>
@@ -158,101 +160,199 @@ const mc = StyleSheet.create({
     shadowColor: '#000', shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.06, shadowRadius: 6, elevation: 2,
   },
-  row:        { flexDirection: 'row', alignItems: 'center' },
-  content:    { flex: 1, gap: 8 },
-  dateTime:   { fontSize: 11, color: '#999999', fontWeight: '500' },
-  circle: {
+  row:     { flexDirection: 'row', alignItems: 'center' },
+  content: { flex: 1, gap: 6 },
+  dateTime:{ fontSize: 11, color: '#999999', fontWeight: '500' },
+  name:    { fontSize: 14, fontWeight: '700', color: '#1A1A1A' },
+  msgRow:  { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  ava:     { width: 24, height: 24, borderRadius: 12, backgroundColor: '#EEEEEE', alignItems: 'center', justifyContent: 'center' },
+  avaIcon: { fontSize: 12 },
+  msg:     { flex: 1, fontSize: 12, color: '#AAAAAA' },
+  sub:     { fontSize: 11, color: Colors.primary, fontWeight: '500' },
+  circle:  {
     width: 52, height: 52, borderRadius: 26,
     borderWidth: 2, backgroundColor: '#FFFFFF',
     alignItems: 'center', justifyContent: 'center',
     alignSelf: 'center', marginLeft: 12,
   },
   circleText: { fontSize: 12, fontWeight: '700' },
-  name:       { fontSize: 14, fontWeight: '700', color: '#1A1A1A' },
-  msgRow:     { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  avatar:     { width: 24, height: 24, borderRadius: 12, backgroundColor: '#EEEEEE', alignItems: 'center', justifyContent: 'center' },
-  avatarIcon: { fontSize: 12 },
-  msg:        { flex: 1, fontSize: 12, color: '#AAAAAA' },
 });
 
-
-// ── Main screen ────────────────────────────────────────────────────────────
+// ── 메인 화면 ─────────────────────────────────────────────────────────────────
 
 export default function SubstituteRequestScreen() {
   const navigation = useNavigation<Nav>();
+  const { storeInfo } = useAuth();
 
-  const [tab,      setTab]      = useState<'incoming' | 'mine'>('incoming');
-  const [incoming, setIncoming] = useState<Request[]>(INITIAL_INCOMING);
-  const mine = INITIAL_MINE;
+  const [tab,     setTab]     = useState<'incoming' | 'mine'>('incoming');
+  const [incoming, setIncoming] = useState<IncomingItem[]>([]);
+  const [mine,    setMine]    = useState<MyItem[]>([]);
+  const [loading, setLoading] = useState(true);
 
-  const accept = (id: string) =>
-    setIncoming((prev) => prev.map((r) => r.id === id ? { ...r, status: 'pending' as Status } : r));
-  const reject = (id: string) =>
-    setIncoming((prev) => prev.map((r) => r.id === id ? { ...r, status: 'rejected' as Status } : r));
+  const loadData = useCallback(async () => {
+    if (!storeInfo) return;
+    setLoading(true);
+    try {
+      const [inRes, myRes] = await Promise.all([
+        api.get(`/substitute/requests/incoming?storeId=${storeInfo.storeId}`),
+        api.get(`/substitute/requests/my?storeId=${storeInfo.storeId}`),
+      ]);
+      setIncoming(inRes.data.data ?? []);
+      // API 응답: flat 구조 (requestId마다 candidateId 행이 별도 존재)
+      // → requestId 기준으로 그룹핑해서 MyItem 배열로 변환
+      const flat: any[] = myRes.data.data ?? [];
+      const grouped = new Map<number, MyItem>();
+      for (const row of flat) {
+        if (!grouped.has(row.requestId)) {
+          grouped.set(row.requestId, {
+            requestId:   row.requestId,
+            requestDate: row.requestDate,
+            startTime:   row.startTime,
+            endTime:     row.endTime,
+            message:     row.message,
+            createdAt:   row.createdAt,
+            candidates:  [],
+          });
+        }
+        grouped.get(row.requestId)!.candidates.push({
+          candidateId: row.candidateId,
+          staffName:   row.candidateName ?? '',
+          status:      (row.candidateStatus ?? 'WAITING') as SubStatus,
+        });
+      }
+      setMine(Array.from(grouped.values()));
+    } catch {
+      // 빈 상태로 표시
+    } finally {
+      setLoading(false);
+    }
+  }, [storeInfo?.storeId]);
+
+  useFocusEffect(useCallback(() => { loadData(); }, [loadData]));
+
+  const handleAccept = (candidateId: number) => {
+    Alert.alert('대타 수락', '이 대타 요청을 수락하시겠습니까?', [
+      { text: '취소', style: 'cancel' },
+      {
+        text: '수락',
+        onPress: async () => {
+          try {
+            await api.post(`/substitute/candidates/${candidateId}/accept`);
+            loadData();
+          } catch {
+            Alert.alert('오류', '수락에 실패했습니다.');
+          }
+        },
+      },
+    ]);
+  };
+
+  const handleDecline = (candidateId: number) => {
+    Alert.alert('대타 거절', '이 대타 요청을 거절하시겠습니까?', [
+      { text: '취소', style: 'cancel' },
+      {
+        text: '거절',
+        style: 'destructive',
+        onPress: async () => {
+          try {
+            await api.post(`/substitute/candidates/${candidateId}/decline`);
+            loadData();
+          } catch {
+            Alert.alert('오류', '거절에 실패했습니다.');
+          }
+        },
+      },
+    ]);
+  };
 
   const isIncoming = tab === 'incoming';
 
   return (
     <SafeAreaView style={s.safe}>
-
-      {/* ── Header ── */}
+      {/* 헤더 */}
       <View style={s.header}>
         <View style={s.headerSide} />
         <Text style={s.headerTitle}>대타 신청</Text>
-        <TouchableOpacity style={s.headerSide} hitSlop={8}>
-          <View style={s.hamburger}>
-            <View style={s.bar} />
-            <View style={s.bar} />
-            <View style={s.bar} />
-          </View>
-        </TouchableOpacity>
+        <View style={s.headerSide} />
       </View>
 
-      {/* ── Pill tabs (좌측 정렬, 소형) ── */}
+      {/* 탭 */}
       <View style={s.tabWrap}>
-        <TouchableOpacity
-          style={[s.pill, isIncoming && s.pillActive]}
-          onPress={() => setTab('incoming')}
-          activeOpacity={0.8}
-        >
-          <Text style={[s.pillText, isIncoming && s.pillTextActive]}>대타 요청 알림</Text>
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={[s.pill, !isIncoming && s.pillActive]}
-          onPress={() => setTab('mine')}
-          activeOpacity={0.8}
-        >
-          <Text style={[s.pillText, !isIncoming && s.pillTextActive]}>내 요청 현황</Text>
-        </TouchableOpacity>
+        {(['incoming', 'mine'] as const).map((t) => (
+          <TouchableOpacity
+            key={t}
+            style={[s.pill, tab === t && s.pillActive]}
+            onPress={() => setTab(t)}
+            activeOpacity={0.8}
+          >
+            <Text style={[s.pillText, tab === t && s.pillTextActive]}>
+              {t === 'incoming' ? '대타 요청 알림' : '내 요청 현황'}
+            </Text>
+          </TouchableOpacity>
+        ))}
       </View>
 
-      {/* ── Card list ── */}
-      <FlatList
-        data={isIncoming ? incoming : mine}
-        keyExtractor={(item) => item.id}
-        renderItem={({ item }) =>
-          isIncoming ? (
-            <RequestCard
-              item={item}
-              onAccept={() => accept(item.id)}
-              onReject={() => reject(item.id)}
-            />
-          ) : (
-            <MineCard item={item} />
-          )
-        }
-        ItemSeparatorComponent={() => <View style={s.sep} />}
-        contentContainerStyle={s.listContent}
-        showsVerticalScrollIndicator={false}
-        ListEmptyComponent={
-          <View style={s.empty}>
-            <Text style={s.emptyText}>요청이 없습니다.</Text>
+      {/* AI 대타 배너 */}
+      {isIncoming && (
+        <TouchableOpacity
+          style={s.aiBanner}
+          activeOpacity={0.85}
+          onPress={() => navigation.navigate('AiSubstituteSchedule')}
+        >
+          <View style={s.aiBannerOverlay} />
+          <View style={s.aiBannerLeft}>
+            <View style={s.aiBadge}>
+              <Text style={s.aiBadgeText}>AI</Text>
+            </View>
+            <View>
+              <Text style={s.aiBannerTitle}>일해조 AI 대타 요청하기</Text>
+              <Text style={s.aiBannerSub}>AI가 최적의 대타 후보를 찾아드려요</Text>
+            </View>
           </View>
-        }
-        style={s.list}
-      />
+          <Ionicons name="chevron-forward" size={18} color="rgba(255,255,255,0.9)" />
+        </TouchableOpacity>
+      )}
 
-      {/* ── FAB ── */}
+      {loading ? (
+        <View style={s.center}>
+          <ActivityIndicator color={Colors.primary} />
+        </View>
+      ) : isIncoming ? (
+        <FlatList
+          data={incoming}
+          keyExtractor={item => String(item.candidateId)}
+          renderItem={({ item }) => (
+            <IncomingCard
+              item={item}
+              onAccept={() => handleAccept(item.candidateId)}
+              onDecline={() => handleDecline(item.candidateId)}
+            />
+          )}
+          ItemSeparatorComponent={() => <View style={s.sep} />}
+          contentContainerStyle={s.listContent}
+          showsVerticalScrollIndicator={false}
+          ListEmptyComponent={
+            <View style={s.empty}>
+              <Text style={s.emptyText}>들어온 대타 요청이 없습니다.</Text>
+            </View>
+          }
+        />
+      ) : (
+        <FlatList
+          data={mine}
+          keyExtractor={item => String(item.requestId)}
+          renderItem={({ item }) => <MineCard item={item} />}
+          contentContainerStyle={[s.listContent, { paddingTop: 12 }]}
+          showsVerticalScrollIndicator={false}
+          ListEmptyComponent={
+            <View style={s.empty}>
+              <Text style={s.emptyText}>요청 내역이 없습니다.</Text>
+            </View>
+          }
+        />
+      )}
+
+      {/* FAB — 대타 요청 시작 */}
       <TouchableOpacity
         style={s.fab}
         activeOpacity={0.85}
@@ -264,12 +364,10 @@ export default function SubstituteRequestScreen() {
   );
 }
 
-// ── Styles ─────────────────────────────────────────────────────────────────
-
 const s = StyleSheet.create({
   safe: { flex: 1, backgroundColor: '#FAFAFA' },
+  center: { flex: 1, alignItems: 'center', justifyContent: 'center' },
 
-  /* Header */
   header: {
     flexDirection: 'row', alignItems: 'center',
     paddingHorizontal: 16, paddingVertical: 14,
@@ -277,33 +375,46 @@ const s = StyleSheet.create({
     borderBottomWidth: 1, borderBottomColor: '#F0F0F0',
   },
   headerSide:  { width: 36 },
-  backArrow:   { fontSize: 22, color: '#1A1A1A' },
   headerTitle: { flex: 1, textAlign: 'center', fontSize: 17, fontWeight: '700', color: '#1A1A1A' },
-  hamburger:   { gap: 4, alignItems: 'flex-end' },
-  bar:         { width: 20, height: 2, borderRadius: 1, backgroundColor: '#1A1A1A' },
 
-  /* Pill tabs */
   tabWrap: {
     flexDirection: 'row', gap: 8,
     paddingHorizontal: 16, paddingVertical: 12,
     backgroundColor: '#FFFFFF',
   },
-  pill: {
-    paddingHorizontal: 14, paddingVertical: 7,
-    borderRadius: 20, borderWidth: 1.5, borderColor: '#DDDDDD',
-  },
-  pillActive:     { borderColor: Colors.primary },
-  pillText:       { fontSize: 12, fontWeight: '600', color: '#AAAAAA' },
-  pillTextActive: { color: Colors.primary },
+  pill:          { paddingHorizontal: 14, paddingVertical: 7, borderRadius: 20, borderWidth: 1.5, borderColor: '#DDDDDD' },
+  pillActive:    { borderColor: Colors.primary },
+  pillText:      { fontSize: 12, fontWeight: '600', color: '#AAAAAA' },
+  pillTextActive:{ color: Colors.primary },
 
-  /* List */
-  list:        { flex: 1 },
+  aiBanner: {
+    marginHorizontal: 16, marginTop: 12, marginBottom: 4,
+    backgroundColor: '#FF8D28',
+    borderRadius: 16, padding: 16,
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    overflow: 'hidden',
+    shadowColor: '#FF8D28', shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.35, shadowRadius: 10, elevation: 5,
+  },
+  aiBannerOverlay: {
+    position: 'absolute', right: -20, top: -20,
+    width: 120, height: 120, borderRadius: 60,
+    backgroundColor: 'rgba(255,255,255,0.12)',
+  },
+  aiBannerLeft: { flexDirection: 'row', alignItems: 'center', gap: 14 },
+  aiBadge: {
+    backgroundColor: '#FFFFFF', borderRadius: 8,
+    paddingHorizontal: 9, paddingVertical: 4,
+  },
+  aiBadgeText: { fontSize: 12, fontWeight: '800', color: '#FF8D28' },
+  aiBannerTitle: { fontSize: 14, fontWeight: '700', color: '#FFFFFF' },
+  aiBannerSub: { fontSize: 11, color: 'rgba(255,255,255,0.85)', marginTop: 2 },
+
   listContent: { paddingBottom: 100 },
   sep:         { height: 1, backgroundColor: '#F0F0F0' },
   empty:       { alignItems: 'center', paddingTop: 60 },
   emptyText:   { fontSize: 14, color: '#AAAAAA' },
 
-  /* FAB */
   fab: {
     position: 'absolute', bottom: 20, right: 20,
     width: 54, height: 54, borderRadius: 27,

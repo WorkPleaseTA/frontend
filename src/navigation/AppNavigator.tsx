@@ -132,13 +132,23 @@ export type RootStackParamList = {
   // Substitute
   SubstituteRequest: undefined;
   SubstituteAvailable: undefined;
-  SubstituteFail: undefined;
-  AiSubstituteList: undefined;
+  AiSubstituteList: {
+    candidates: { storeMemberId: number; staffName: string; availableTimes: string[] }[];
+    requestDate: string;
+    startTime: string;
+    endTime: string;
+  };
+  SubstituteFail: {
+    selectedCandidates: { storeMemberId: number; staffName: string }[];
+    requestDate: string;
+    startTime: string;
+    endTime: string;
+  };
   AiSubstituteSchedule: undefined;
   AiSubstituteTime: undefined;
   // Chat
-  PersonalChat: undefined;
-  GroupChat: undefined;
+  PersonalChat: { roomId: number; roomName: string };
+  GroupChat: { roomId: number; roomName: string; memberCount?: number };
   // Notification
   NotificationPage: undefined;
 };
